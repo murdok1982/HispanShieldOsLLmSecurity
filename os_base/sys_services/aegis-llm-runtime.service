@@ -1,0 +1,27 @@
+[Unit]
+Description=HispanShield OS LLmSecurity Local GGUF LLM Runtime (llama.cpp)
+After=syslog.target network.target aegis-firewall.service
+# El LLM no puede iniciar hasta que las defensas de red (nftables) estÃ©n altas
+
+[Service]
+Type=simple
+User=aegis_agent
+Group=aegis
+WorkingDirectory=/opt/HispanShield OS LLmSecurity/models
+# Ejecutamos modo servidor (API tipo OpenAI) solo por loopback de Unix Sockets (preferible) o 127.0.0.1
+ExecStart=/opt/HispanShield OS LLmSecurity/bin/llama-server -m aegis-core-1.5b.gguf -c 4096 --host 127.0.0.1 --port 8080 --threads 4
+
+# Controles de aislamiento drÃ¡sticos (Hardening Options)
+ProtectSystem=strict
+ReadWritePaths=/var/log/HispanShield OS LLmSecurity
+ProtectHome=true
+PrivateTmp=true
+NoNewPrivileges=true
+CapabilityBoundingSet=
+SystemCallFilter=~@mount @raw-io @debug @privileged
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
