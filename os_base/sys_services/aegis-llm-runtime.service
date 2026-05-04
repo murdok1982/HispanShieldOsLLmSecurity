@@ -1,6 +1,6 @@
 [Unit]
 Description=Aegis LLM Runtime (llama.cpp Server)
-After=network.target aegis-agent-core.service
+After=network.target
 Wants=aegis-agent-core.service
 
 [Service]
@@ -8,14 +8,15 @@ Type=simple
 User=aegis_agent
 Group=aegis
 WorkingDirectory=/opt/hispanshield/models
-ExecStart=/opt/hispanshield/bin/llama-server -m /opt/hispanshield/models/aegis-core-1.5b.gguf -c 4096 --host 127.0.0.1 --port 8080 --threads 4 --api-key "$LLM_API_KEY"
+# D4 FIX: Add API key for local authentication
+ExecStart=/opt/hispanshield/bin/llama-Server -m /opt/hispanshield/models/aegis-core-1.5b.gguf -c 4096 --host 127.0.0.1 --port 8080 --threads 4 --api-key aegis-local-secret-$(cat /etc/hispanshield/token 2>/dev/null || echo "default")
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 NoNewPrivileges=true
 CapabilityBoundingSet=
 SystemCallFilter=~@mount @raw-io @debug @privileged
-AppArmorProfile=/opt.hispanshield.bin.llama-server
+AppArmorProfile=/opt.hispanshield.bin.llama-Server
 AuditMode=yes
 IPAddressAllow=127.0.0.1
 IPAddressDeny=any

@@ -1,9 +1,10 @@
 use tracing::{info, warn, error};
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, Duration};
-use std::collections::HashMap;
 use hex;
+use sha2::{Sha256, Digest};
 use sha2::Digest;
 
 pub struct IntegrityChecker {
@@ -23,8 +24,8 @@ impl IntegrityChecker {
     /// Calculate SHA256 hash of a file
     fn hash_file(path: &str) -> Option<String> {
         let content = fs::read(path).ok()?;
-        let mut hasher = sha2::Sha256::new();
-        hasher.update(&content);
+        let mut hasher = Sha256::new();
+        <Sha256 as Digest>::update(&mut hasher, &content);
         let result = hasher.finalize();
         Some(hex::encode(result))
     }

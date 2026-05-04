@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # FINAL BUILD SCRIPT - HispanShield OS Military Grade
-# Run this in WSL2 or Debian/Ubuntu host
+# Run this in WSL2 or Debian/Ubuntu host (FIXED paths)
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 echo "==============================================================="
 echo "HispanShield OS LLmSecurity - FINAL MILITARY BUILD"
 echo "Producto Estatal-Militar - Todas las mejoras implementadas"
+echo "Build directory: $SCRIPT_DIR"
 echo "==============================================================="
 
 # 1. Verify Rust installation
@@ -18,9 +20,10 @@ fi
 
 # 2. Compile Rust core components (Military Grade - Memory Safe)
 echo "[+] Compiling Rust core components..."
-cd "$(dirname "$0")"/core/rust
+cd "$SCRIPT_DIR/core/rust"
 
-cargo build --release
+cargo build --release 2>&1
+
 if [ $? -eq 0 ]; then
     echo "[+] Rust compilation SUCCESSFUL"
     ls -la target/release/aegis-*
@@ -31,12 +34,12 @@ fi
 
 # 3. Build Standard ISO (8GB+ RAM)
 echo "[+] Building standard ISO..."
-cd "$(dirname "$0")"
-sudo ./build_iso.sh
+cd "$SCRIPT_DIR"
+sudo bash build_iso.sh
 
 # 4. Build Edge Tactical ISO (4GB RAM)
 echo "[+] Building Edge Tactical ISO..."
-sudo ./build_iso_edge.sh
+sudo bash build_iso_edge.sh
 
 # 5. Run Security & Compliance Test Suite
 echo "[+] Running test suite..."
@@ -46,13 +49,13 @@ sudo bash core/test_suite.sh
 echo "[+] Generating SBOM..."
 sudo bash core/compliance/generate_sbom.sh
 
-# 7. Sign all binaries with state PGP key
+# 7. Sign binaries with state PGP key (if available)
 echo "[+] Signing binaries with state PGP key..."
 if gpg --list-keys "HispanShield State" &> /dev/null; then
     gpg --detach-sign --armor -u "HispanShield State" \
-        target/release/aegis-sentinel
+        "$SCRIPT_DIR/core/rust/target/release/aegis-sentinel"
     gpg --detach-sign --armor -u "HispanShield State" \
-        target/release/aegis-gatekeeper
+        "$SCRIPT_DIR/core/rust/target/release/aegis-gatekeeper"
     echo "[+] Binaries signed successfully"
 else
     echo "[!] State PGP key not found - signing skipped"
@@ -68,7 +71,7 @@ echo "VERIFICATION:"
 echo "  1. Test ISO in VM: boot with Secure Boot enabled"
 echo "  2. Verify TPM 2.0: systemctl status aegis-llm-runtime"
 echo "  3. Test MFA: Login requires hardware token"
-echo "  4. Test MLS: selinux status (enforcing, mls policy)"
+echo "  4. Test MLS: sestatus (enforcing, mls policy)"
 echo "  5. Test offensive tools: nmap_scan (requires MFA)"
 echo "  6. Verify audit: journalctl -u aegis-agent-core"
 echo "==============================================================="

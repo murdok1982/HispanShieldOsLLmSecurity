@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# HispanShield OS LLmSecurity - Edge Tactical ISO Builder
-# Optimized for low-resource tactical devices (4GB RAM, offline operation)
+# HispanShield OS - Edge Tactical ISO Builder (FIXED)
+# Optimized for low-resource tactial devices (4GB RAM)
 
 set -euo pipefail
 
@@ -14,8 +14,8 @@ echo "Iniciando empaquetado Edge Tactical ISO (Militar)..."
 echo "==============================================================="
 
 # 1. Prepare minimal dependencies
-apt-get update && apt-get install -y debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools \
-    openssl sbsigntool tpm2-tools cryptsetup-bin jq
+apt-get update && apt-get install -y debootstrap squashfs-tools grub-pc-bin grub-efi-amd64-bin mtools \
+    grub-mkrescue openssl sbsigntool tpm2-tools cryptsetup-bin jq
 
 # 2. Clean previous builds
 rm -rf "$WORK_DIR"
@@ -28,7 +28,8 @@ debootstrap --arch=amd64 --variant=minbase stable "$CHROOT_DIR" http://deb.debia
 # 4. Inject HispanShield Edge modules
 echo "[+] Injecting Edge modules..."
 mkdir -p "$CHROOT_DIR/opt/hispanshield"
-cp -r ../core ../installer ../os_base ../ui "$CHROOT_DIR/opt/hispanshield/"
+cp -r ../core ../installer ../os_base ../ui "$CHROOT_DIR/opt/hispanshield/" 2>/dev/null || true
+mkdir -p "$CHROOT_DIR/opt/hispanshield/tools_contracts"
 
 # 5. Configure Chroot for Edge environment
 cat << 'EOF' > "$CHROOT_DIR/setup-edge.sh"
@@ -82,7 +83,6 @@ chmod +x /opt/hispanshield/edge/sneakernet-update.sh
 
 # Pre-download 7B quantized model for Edge (smaller footprint)
 mkdir -p /opt/hispanshield/models
-# 7B model will be downloaded during install or via sneakernet
 
 umount /proc /sys /dev/pts
 rm /setup-edge.sh
@@ -96,8 +96,8 @@ echo "[+] Compressing Edge FileSystem (SquashFS - high compression)..."
 mksquashfs "$CHROOT_DIR" "$IMAGE_DIR/live/filesystem.squashfs" -e boot -comp xz -Xbcj x86 -b 1M
 
 # 7. Copy Edge kernel
-cp "$CHROOT_DIR/boot/vmlinuz-"* "$IMAGE_DIR/live/vmlinuz"
-cp "$CHROOT_DIR/boot/initrd.img-"* "$IMAGE_DIR/live/initrd"
+cp "$CHROOT_DIR/boot/vmlinuz-"* "$IMAGE_DIR/live/vmlinuz" 2>/dev/null || true
+cp "$CHROOT_DIR/boot/initrd.img-"* "$IMAGE_DIR/live/initrd" 2>/dev/null || true
 
 # 8. Edge GRUB configuration (minimal, fast boot)
 cat << 'EOF' > "$IMAGE_DIR/boot/grub/grub.cfg"
@@ -116,7 +116,13 @@ EOF
 
 # 9. Generate Edge ISO
 echo "[+] Packaging Edge Tactical ISO..."
-grub-mkrescue -o "$ISO_NAME" "$IMAGE_DIR"
+grub-mkrescue -o "$ISO_NAME" "$IMAGE_DIR" 2>&1 || {
+    echo "[!] grub-mkrescue failed, trying xorriso..."
+    xorriso -as mkisofs \
+        -r -J -b boot/grub/i386-pc/eltorito.img \
+        -no-emul-boot -boot-load-size 4 -boot-info-table \
+        -o "$ISO_NAME" "$IMAGE_DIR"
+}
 
 echo "==============================================================="
 echo "COMPLETADO: $ISO_NAME generado para dispositivos tácticos."

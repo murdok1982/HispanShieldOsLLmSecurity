@@ -1,5 +1,6 @@
 # U2F/FIDO2 Key mapping for HispanShield OS Military Users
 # Format: <username>:<keyHandle1>,<keyHandle2>:<publicKey1>,<publicKey2>
+# REAL KEYS ONLY - Remove default:default stubs (CWE-287)
 
-# IMPORTANT: Provision FIDO2 keys using pamu2fcfg before deployment.
-# Run: pamu2fcfg -u aegis_admin > /etc/hispanshield/pam/u2f_keys
+# aegis_admin: <paste real keyHandle here>,<optional 2nd key>:<paste real publicKey here>
+# aegis_agent: <paste real keyHandle here>:<paste real publicKey here>

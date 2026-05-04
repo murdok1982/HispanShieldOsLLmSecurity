@@ -1,87 +1,66 @@
-:root {
-  --os-bg: #050505;
-  --glass-bg: rgba(20, 20, 25, 0.85);
-  --glass-border: rgba(255, 170, 0, 0.2);
-  --glass-blur: blur(8px);
-  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
-  
-  --accent-color: #FFAA00; /* Tactical Amber */
-  --alert-color: #FF3B30;
-  --success-color: #FFAA00; /* Replaced green with amber for consistency */
-  
-  --text-primary: #FFFFFF;
-  --text-secondary: rgba(255, 255, 255, 0.85); /* Improved contrast > 7.1 */
-  --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: monospace;
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Classification banner styles (U1 FIX) */
+.class-banner {
+  @apply fixed left-0 right-0 h-6 flex items-center justify-center font-bold text-sm z-[9999];
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+.top-banner {
+  @apply top-0;
 }
 
-body {
-  font-family: var(--font-main);
-  background-color: var(--os-bg);
-  color: var(--text-primary);
-  overflow: hidden;
-  user-select: none;
+.bottom-banner {
+  @apply bottom-0;
 }
 
-/* Background Image Layer */
-.desktop-bg {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  /* Use the uploaded image, defaulting to cover styling */
-  background-image: url('/bg.jpg'); 
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-  z-index: -1;
+/* Tactical color palette (U4 FIX: No macOS blue) */
+.tactical-amber {
+  @apply text-amber-400;
 }
 
-/* Base Glassmorphism utility */
-.glass-panel {
-  background: var(--glass-bg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
-  border-radius: 16px;
+.tactical-phosphor {
+  @apply text-green-400;
 }
 
-/* Typography Utilities */
-.mono-text {
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-  letter-spacing: -0.02em;
+/* High contrast alerts (WCAG AAA) */
+.alert-critical {
+  @apply bg-red-600 text-white font-bold p-2 rounded;
 }
 
-/* Animations */
-@keyframes pulseGlow {
-  0% { box-shadow: 0 0 0 0 rgba(52, 199, 89, 0.4); }
-  70% { box-shadow: 0 0 0 10px rgba(52, 199, 89, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(52, 199, 89, 0); }
+.alert-warning {
+  @apply bg-yellow-500 text-black font-bold p-2 rounded;
 }
 
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: var(--success-color);
-  animation: pulseGlow 2s infinite;
+/* No color-only alerts (U4 FIX: icons + patterns) */
+.alert-with-icon {
+  @apply flex items-center gap-2;
 }
 
-.critical-pattern {
-  background-image: repeating-linear-gradient(
-    45deg,
-    rgba(255, 59, 48, 0.1),
-    rgba(255, 59, 48, 0.1) 10px,
-    transparent 10px,
-    transparent 20px
-  );
+/* Reduced backdrop-blur for 12h fatigue (U4 FIX) */
+.panel-critical {
+  @apply bg-gray-900/90 backdrop-blur-sm;
+}
+
+/* Classification colors */
+.confidencial { @apply bg-orange-500 text-white; }
+.secreto { @apply bg-red-600 text-white; }
+.alto-secreto { @apply bg-white text-red-600; }
+
+/* German-style consent screen */
+.consent-screen {
+  @apply fixed inset-0 bg-gray-900 text-white flex flex-col items-center justify-center z-[99999] p-8;
+}
+
+.consent-button {
+  @apply px-6 py-3 rounded-lg font-bold text-lg transition-colors;
+}
+
+.consent-abort {
+  @apply bg-red-600 hover:bg-red-700 text-white;
+}
+
+.consent-accept {
+  @apply bg-green-600 hover:bg-green-700 text-white;
 }

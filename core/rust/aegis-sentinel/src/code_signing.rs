@@ -14,24 +14,36 @@ impl CodeSigning {
         Self { gpg_key_id: key_id, public_key_path }
     }
 
-    /// Sign a binary with state PGP key
+    /// Sign a binary with state PGP key (CWE-78 FIX: Sanitized inputs)
     pub fn sign_binary(&self, binary_path: &str) -> Result<String, String> {
-        if !Path::new(binary_path).exists() {
+        // CWE-78 FIX: Validate binary_path is absolute and within /opt/hispanshield/
+        let path = Path::new(binary_path);
+        if !path.is_absolute() || !binary_path.starts_with("/opt/hispanshield/") {
+            return Err(format!("Invalid binary path: must be under /opt/hispanshield/"));
+        }
+        
+        if !path.exists() {
             return Err(format!("Binary not found: {}", binary_path));
+        }
+
+        // CWE-78 FIX: Validate gpg_key_id format (must be valid PGP key ID)
+        if self.gpg_key_id.is_empty() || self.gpg_key_id.contains(' ') || self.gpg_key_id.contains(';') {
+            return Err("Invalid PGP key ID".to_string());
         }
 
         info!(target: "code_signing", "Signing binary: {}", binary_path);
         
         let signature_path = format!("{}.sig", binary_path);
         
+        // CWE-78 FIX: Use arg() properly, no string interpolation
         let output = Command::new("gpg")
-            .args(&[
-                "--batch", "--yes",
-                "-u", &self.gpg_key_id,
-                "--detach-sign", "--armor",
-                "-o", &signature_path,
-                binary_path
-            ])
+            .arg("--batch")
+            .arg("--yes")
+            .arg("-u").arg(&self.gpg_key_id)
+            .arg("--detach-sign")
+            .arg("--armor")
+            .arg("-o").arg(&signature_path)
+            .arg(binary_path)
             .output()
             .map_err(|e| format!("Failed to sign: {}", e))?;
 
@@ -44,8 +56,14 @@ impl CodeSigning {
         }
     }
 
-    /// Verify binary signature
+    /// Verify binary signature (CWE-78 FIX: Sanitized inputs)
     pub fn verify_signature(&self, binary_path: &str) -> bool {
+        // Validate path
+        if !Path::new(binary_path).is_absolute() || !binary_path.starts_with("/opt/hispanshield/") {
+            warn!(target: "code_signing", "Invalid binary path for verification");
+            return false;
+        }
+
         let signature_path = format!("{}.sig", binary_path);
         
         if !Path::new(&signature_path).exists() {
@@ -54,11 +72,10 @@ impl CodeSigning {
         }
 
         let output = Command::new("gpg")
-            .args(&[
-                "--verify", &signature_path, binary_path
-            ])
-            .output()
-            .map_err(|_| false);
+            .arg("--verify")
+            .arg(&signature_path)
+            .arg(binary_path)
+            .output();
 
         match output {
             Ok(out) => {
@@ -70,7 +87,10 @@ impl CodeSigning {
                     false
                 }
             }
-            Err(_) => false,
+            Err(e) => {
+                warn!(target: "code_signing", "Verification error: {}", e);
+                false
+            }
         }
     }
 

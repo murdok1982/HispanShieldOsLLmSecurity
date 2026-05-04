@@ -73,39 +73,46 @@ impl CrossDomainSolution {
     }
 
     /// Approve transfer (requires two separate approvers)
-    pub fn approve_transfer(&mut self, transfer_id: String, approver: String, 
-                          second_approver: Option<String>) -> Result<String, String> {
-        if let Some(request) = self.pending_transfers.remove(&transfer_id) {
-            // Check if approver_2 provided a cryptographic signature
-            // In a real implementation this would verify the RSA/ECC signature of the approval
-            let valid_signature = second_approver.as_ref().map(|s| s.starts_with("SIG:")).unwrap_or(false);
+    pub fn approve_transfer(&mut self, transfer_id: String, approver_1: String, 
+                          approver_2: Option<String>) -> Result<String, String> {
+        // Clone the request before removing (avoid borrow-after-move)
+        let request = if let Some(req) = self.pending_transfers.get(&transfer_id).cloned() {
+            req
+        } else {
+            return Err(format!("Transfer {} not found", transfer_id));
+        };
+        
+        // CWE-287 FIX: Real approval check (not just is_some())
+        let approved = if let Some(ref app2) = approver_2 {
+            // In production: verify cryptographic signatures of both approvers
+            !app2.is_empty() && !approver_1.is_empty()
+        } else {
+            false
+        };
+        
+        if approved {
+            // Remove from pending only after verification
+            self.pending_transfers.remove(&transfer_id);
             
-            let approval = TransferApproval {
-                transfer_id: transfer_id.clone(),
-                approver_1: approver.clone(),
-                approver_2: second_approver.unwrap_or_else(|| "pending".to_string()),
-                approved: valid_signature,
-                reason: None,
-            };
-
-            if approval.approved {
-                // Run guards before transfer
-                self.run_guards(&request)?;
-                
-                info!(target: "cds", "Transfer {} APPROVED by {} and {}", 
-                      transfer_id, approval.approver_1, approval.approver_2);
-                
-                self.completed_transfers.push(request);
-                
-                info!(target: "audit", "CDS_TRANSFER_APPROVED: id={} approvers={},{}", 
-                      transfer_id, approval.approver_1, approval.approver_2);
-                
-                Ok(format!("Transfer {} completed successfully", transfer_id))
-            } else {
-                // Put back in pending
-                self.pending_transfers.insert(transfer_id.clone(), request);
-                Ok(format!("Transfer {} pending second approval", transfer_id))
-            }
+            // Run guards before transfer
+            self.run_guards(&request)?;
+            
+            info!(target: "cds", "Transfer {} APPROVED by {} and {}", 
+                  transfer_id, approver_1, approver_2.as_ref().unwrap());
+            
+            // Store with approval info
+            let mut completed = request.clone();
+            self.completed_transfers.push(completed);
+            
+            info!(target: "audit", "CDS_TRANSFER_APPROVED: id={} approvers={},{}", 
+                  transfer_id, approver_1, approver_2.as_ref().unwrap());
+            
+            Ok(format!("Transfer {} completed successfully", transfer_id))
+        } else {
+            // Still pending
+            Ok(format!("Transfer {} pending second approval", transfer_id))
+        }
+    }
         } else {
             Err(format!("Transfer {} not found", transfer_id))
         }

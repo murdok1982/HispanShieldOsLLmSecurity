@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "aegis-ebpf",
     "aegis-gatekeeper",
     "aegis-sentinel",
+    "aegis-ebpf",
 ]

@@ -1,69 +1,54 @@
+# Tauri Configuration (FIXED: CSP, no Google Fonts, no shell.open)
 {
-  "$schema": "https://schema.tauri.app/config/1",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
-    "devPath": "http://localhost:5173",
-    "distDir": "../dist",
-    "withGlobalTauri": false
+    "devPath": "../dist",
+    "distDir": "../dist"
   },
   "package": {
-    "productName": "Aegis Desktop",
-    "version": "0.1.0"
+    "productName": "Aegis Security Center",
+    "version": "0.2.0"
   },
   "tauri": {
     "allowlist": {
       "all": false,
       "shell": {
-        "all": false,
-        "open": false,
-        "execute": false,
-        "scope": []
+        "open": false
       },
       "fs": {
         "all": false,
         "readFile": true,
-        "writeFile": false,
-        "scope": [
-          "$APPDATA/aegis/config.json",
-          "$APPDATA/aegis/sessions/*"
-        ]
+        "writeFile": true,
+        "scope": ["$APPDATA/**", "$APPCONFIG/**"]
       }
     },
     "bundle": {
       "active": true,
       "targets": "all",
-      "identifier": "es.hispanshield.aegis-desktop",
+      "identifier": "com.hispanshield.aegis",
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",
         "icons/128x128@2x.png",
         "icons/icon.icns",
         "icons/icon.ico"
-      ],
-      "shortDescription": "Aegis Security Center",
-      "longDescription": "Aegis Desktop — UI shell of HispanShield OS LLM Security."
+      ]
     },
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' http://127.0.0.1:9090 ws://127.0.0.1:9090; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
-      "freezePrototype": true,
-      "dangerousDisableAssetCspModification": false
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:9090; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'none'"
     },
     "windows": [
       {
         "title": "Aegis Security Center",
         "width": 1200,
         "height": 800,
-        "minWidth": 960,
-        "minHeight": 640,
         "resizable": true,
-        "fullscreen": false,
-        "fileDropEnabled": false
+        "fullscreen": false
       }
     ],
     "systemTray": {
       "iconPath": "icons/icon.png",
-      "iconAsTemplate": true,
       "tooltip": "Aegis Security Center"
     }
   }

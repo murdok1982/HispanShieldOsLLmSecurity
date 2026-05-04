@@ -1,13 +1,31 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Aegis Desktop - HispanShield OS</title>
+    <title>Aegis Security Center - HispanShield OS</title>
+    <style>
+      /* Self-hosted fonts or system-ui fallback - NO Google Fonts (OPSEC) */
+      body { font-family: system-ui, -apple-system, sans-serif; margin: 0; }
+      /* Classification banner */
+      .class-banner {
+        position: fixed; left: 0; right: 0; height: 24px;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: bold; font-size: 14px; color: white; z-index: 9999;
+      }
+      .top-banner { top: 0; background: #FF6600; } /* Confidencial */
+      .bottom-banner { bottom: 0; background: #FF6600; }
+      .secreto .top-banner { background: #FF0000; }
+      .secreto .bottom-banner { background: #FF0000; }
+      .alto-secreto .top-banner { background: #FFFFFF; color: #000000; }
+      .alto-secreto .bottom-banner { background: #FFFFFF; color: #000000; }
+    </style>
   </head>
-  <body>
+  <body class="confidencial">
+    <div class="class-banner top-banner">CONFIDENCIAL // NOFORN</div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <div class="class-banner bottom-banner">CONFIDENCIAL // NOFORN</div>
   </body>
 </html>

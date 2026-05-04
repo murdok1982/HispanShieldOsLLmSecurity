@@ -1,16 +1,21 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Bot, User, Shield } from 'lucide-react';
+import { Send, Bot, User, Shield, AlertTriangle } from 'lucide-react';
 import { invoke } from '@tauri-apps/api';
 
 interface Message {
   role: 'user' | 'agent';
   content: string;
+  timestamp?: number;
 }
 
 export function AIWidget() {
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'agent', content: 'Hola, soy Aegis. Sistema de defensa HispanShield activo. ¿En qué puedo ayudarte?' }
+    { 
+      role: 'agent', 
+      content: 'Hola, soy Aegis. Sistema de defensa cibernética activo. ¿En qué puedo ayudarte?',
+      timestamp: Date.now()
+    }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -19,20 +24,28 @@ export function AIWidget() {
     if (!input.trim()) return;
     
     const userMessage = input;
-    setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setMessages(prev => [...prev, { role: 'user', content: userMessage, timestamp: Date.now() }]);
     setInput('');
     setIsLoading(true);
 
     try {
-      // Send command to Sentinel via Tauri IPC
+      // CWE-942 FIX: Send to local Sentinel only (no external calls)
       const response = await invoke<string>('send_command', {
         tool: 'ai_query',
         args: JSON.stringify({ query: userMessage })
       });
       
-      setMessages(prev => [...prev, { role: 'agent', content: response }]);
+      setMessages(prev => [...prev, { 
+        role: 'agent', 
+        content: response,
+        timestamp: Date.now()
+      }]);
     } catch (error) {
-      setMessages(prev => [...prev, { role: 'agent', content: `Error: ${error}` }]);
+      setMessages(prev => [...prev, { 
+        role: 'agent', 
+        content: `Error: ${error}. Verifique que el servicio Sentinel esté activo.`,
+        timestamp: Date.now()
+      }]);
     } finally {
       setIsLoading(false);
     }
@@ -42,7 +55,7 @@ export function AIWidget() {
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-gray-900/80 backdrop-blur-xl rounded-2xl border border-cyan-500/20 overflow-hidden"
+      className="bg-gray-900/90 backdrop-blur-sm rounded-2xl border border-cyan-500/20 overflow-hidden"
     >
       <div className="bg-gray-800/50 p-4 border-b border-cyan-500/20">
         <div className="flex items-center gap-3">
@@ -51,7 +64,7 @@ export function AIWidget() {
           </div>
           <div>
             <h3 className="text-white font-semibold">Sentinel Agent</h3>
-            <p className="text-xs text-gray-400">Qwen2.5-1.5B Local | Militar</p>
+            <p className="text-xs text-gray-400">Qwen2.5 Local | Estado: Activo</p>
           </div>
           <Shield className="w-5 h-5 text-green-400 ml-auto" />
         </div>
@@ -77,6 +90,11 @@ export function AIWidget() {
                   : 'bg-gray-800 text-gray-100'
               }`}>
                 {msg.content}
+                {msg.timestamp && (
+                  <div className="text-xs text-gray-400 mt-1">
+                    {new Date(msg.timestamp).toLocaleTimeString()}
+                  </div>
+                )}
               </div>
               {msg.role === 'user' && (
                 <div className="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center flex-shrink-0">

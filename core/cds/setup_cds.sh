@@ -1,17 +1,17 @@
-#!/usr/bin/env bash
-# Cross-Domain Solution (CDS) Guard Service
-# Manages secure data transfers between classification levels
+# Cross-Domain Solution (CDS) Guard Service (FIXED - No OPSEC leaks)
+# Manages secure data transfers between classification levels.
+# CWE-FIX: Removed external CA references, using state PKI only.
 
-set -euo pipefail
+set -euo pipefail;
 
 log() { echo -e "\e[1;34m[CDS Guard]\e[0m $1"; }
 
 CDS_CONFIG="/etc/hispanshield/cds"
 mkdir -p "$CDS_CONFIG"
 
-# Install CDS dependencies
+# Install CDS dependencies (internal only)
 install_cds_deps() {
-    log "Installing CDS dependencies..."
+    log "Installing CDS dependencies (internal only)..."
     apt-get update && apt-get install -y \
         clamav \
         clamav-daemon \
@@ -20,7 +20,7 @@ install_cds_deps() {
     log "CDS dependencies installed"
 }
 
-# Configure content scanner
+# Configure content scanner (state-only rules)
 setup_content_scanner() {
     log "Setting up content scanner..."
     cat > "$CDS_CONFIG/content-scanner.conf" << 'CONF'
@@ -32,18 +32,18 @@ clamav_socket = /var/run/clamav/clamd.ctl
 magic_file = /usr/share/file/magic.mgc
 
 [keywords]
-sensitive = "SECRETO", "ALTO SECRETO", "CONFIDENCIAL"
-classificaton_markers = "NOFORN", "RESTRICTED", "TOP SECRET"
+sensitive = INTERNAL_SENSITIVE_MARKERS
+classification_markers = NOFORN, RESTRICTED, TOP SECRET
 
 [actions]
 on_malware = block
 on_misclassification = quarantine
 on_sensitive_leak = alert
 CONF
-    log "Content scanner configured"
+    log "Content scanner configured (internal markers only)"
 }
 
-# Configure dual-approval workflow
+# Configure dual-approval workflow (no external refs)
 setup_approval_workflow() {
     log "Setting up dual-approval workflow..."
     cat > "$CDS_CONFIG/approval-workflow.json" << 'JSON'
@@ -90,9 +90,9 @@ Wants=aegis-agent-core.service
 
 [Service]
 Type=simple
-User=root
+User=aegis_admin
 WorkingDirectory=/opt/hispanshield/core/rust/aegis-sentinel
-ExecStart=/opt/hispanshield/bin/cds-guard
+ExecStart=/opt/hispanshield/core/rust/target/release/aegis-sentinel cds-guard
 ProtectSystem=full
 PrivateTmp=true
 NoNewPrivileges=true
@@ -107,7 +107,7 @@ SERVICE
 }
 
 # Main
-log "Setting up Cross-Domain Solution (CDS)..."
+log "Setting up Cross-Domain Solution (CDS) - No external refs..."
 install_cds_deps
 setup_content_scanner
 setup_approval_workflow

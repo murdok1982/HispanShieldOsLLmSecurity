@@ -6,6 +6,8 @@ pub struct ToolPolicy {
     pub requires_human: bool,
 }
 
+use std::collections::{HashMap, HashSet};
+
 pub struct PolicyEngine {
     allowlist_tools: HashMap<String, ToolPolicy>,
     restricted_tools: HashSet<String>,

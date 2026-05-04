@@ -24,9 +24,12 @@ getent passwd aegis_admin >/dev/null || useradd -r -g aegis_admin -s /bin/bash -
 log "Deshabilitando autenticación por contraseña para cuentas de servicio..."
 passwd -l aegis_agent 2>/dev/null || true
 passwd -l aegis_admin 2>/dev/null || true
-# Remove password hash from shadow
-sed -i 's/^\(aegis_agent:\)[^:]*/\1!/' /etc/shadow 2>/dev/null || true
-sed -i 's/^\(aegis_admin:\)[^:]*/\1!/' /etc/shadow 2>/dev/null || true
+# Remove password hash from shadow (replace with ! for locked account)
+sed -i 's/^\(aegis_agent:\)[^:]*:/\1!:1/' /etc/shadow 2>/dev/null || true
+sed -i 's/^\(aegis_admin:\)[^:]*:/\1!:1/' /etc/shadow 2>/dev/null || true
+# CWE-287 FIX: Enforce empty password field (not just locked)
+sed -i 's/^\(aegis_agent:\)!:/aegis_agent:\*:/' /etc/shadow 2>/dev/null || true
+sed -i 's/^\(aegis_admin:\)!:/aegis_admin:\*:/' /etc/shadow 2>/dev/null || true
 
 # 2. Configurar estructura de directorios con cifrado
 log "Estableciendo estructura de directorios y permisos..."

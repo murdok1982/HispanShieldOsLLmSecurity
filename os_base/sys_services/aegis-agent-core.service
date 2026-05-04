@@ -5,9 +5,17 @@ Wants=aegis-llm-runtime.service
 
 [Service]
 Type=simple
+# CWE-269 FIX: Do NOT run as root - contradicts Zero-Trust
 User=aegis_admin
+Group=aegis_admin
 WorkingDirectory=/opt/hispanshield/core/rust/aegis-sentinel
 ExecStart=/opt/hispanshield/core/rust/target/release/aegis-sentinel
+# Additional hardening
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+RestrictSUIDGID=true
 ProtectSystem=full
 PrivateTmp=true
 ReadOnlyPaths=/etc
