@@ -47,22 +47,38 @@ FILEBEAT
     log "Filebeat configured for SIEM integration"
 }
 
-# Configure mutual TLS for log forwarding
+# Configure mutual TLS for log forwarding using step-ca
 configure_mtls() {
-    log "Configuring mutual TLS for SIEM..."
+    log "Configuring mutual TLS for SIEM using step-ca..."
+    
+    # Install step-cli
+    log "Installing step-cli..."
+    wget -qO step.tar.gz https://github.com/smallstep/cli/releases/download/v0.25.0/step_linux_0.25.0_amd64.tar.gz
+    tar -xzf step.tar.gz
+    mv step_0.25.0/bin/step /usr/local/bin/
+    rm -rf step.tar.gz step_0.25.0
+    
     mkdir -p /etc/hispanshield/pki
     
-    # Generate client certificate for this node (self-signed for demo, use state PKI in production)
-    openssl genrsa -out /etc/hispanshield/pki/filebeat.key 2048
-    openssl req -new -key /etc/hispanshield/pki/filebeat.key \
-        -out /etc/hispanshield/pki/filebeat.csr \
-        -subj "/CN=hispanshield-node/O=StateMilitary/C=ES"
-    openssl x509 -req -days 365 -in /etc/hispanshield/pki/filebeat.csr \
-        -signkey /etc/hispanshield/pki/filebeat.key \
-        -out /etc/hispanshield/pki/filebeat.crt
+    # In production, step-ca connects to a state provisioner. 
+    # For PoC, we bootstrap a local CA.
+    export STEPPATH=/etc/hispanshield/pki/.step
+    step ca init --name="HispanShield State CA" --provisioner="admin" --dns="localhost" --address="127.0.0.1:8443" --password-file=<(echo "military-grade-password")
     
-    # Copy CA certificate (in production, use state-provided CA)
-    cp /etc/hispanshield/pki/filebeat.crt /etc/hispanshield/pki/ca.crt
+    # Start the CA in background for issuing certs
+    step-ca /etc/hispanshield/pki/.step/config/ca.json --password-file=<(echo "military-grade-password") &
+    CA_PID=$!
+    sleep 2
+    
+    # Issue client certificate for Filebeat
+    step ca certificate "hispanshield-node" /etc/hispanshield/pki/filebeat.crt /etc/hispanshield/pki/filebeat.key \
+        --provisioner="admin" --provisioner-password-file=<(echo "military-grade-password") --not-after=8760h
+    
+    # Copy root CA certificate
+    cp /etc/hispanshield/pki/.step/certs/root_ca.crt /etc/hispanshield/pki/ca.crt
+    
+    # Kill background CA (we only needed it to issue the node certs in this PoC)
+    kill $CA_PID
     
     chmod 600 /etc/hispanshield/pki/filebeat.key
     chmod 644 /etc/hispanshield/pki/filebeat.crt

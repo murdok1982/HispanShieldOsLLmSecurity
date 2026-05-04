@@ -2,7 +2,9 @@ use tracing::{info, warn, error};
 use std::fs;
 use std::path::Path;
 use std::time::{SystemTime, Duration};
+use std::collections::HashMap;
 use hex;
+use sha2::Digest;
 
 pub struct IntegrityChecker {
     check_interval: Duration,
@@ -22,8 +24,8 @@ impl IntegrityChecker {
     fn hash_file(path: &str) -> Option<String> {
         let content = fs::read(path).ok()?;
         let mut hasher = sha2::Sha256::new();
-        sha2::Digest::update(&mut hasher, &content);
-        let result = sha2::Digest::finalize(hasher);
+        hasher.update(&content);
+        let result = hasher.finalize();
         Some(hex::encode(result))
     }
 

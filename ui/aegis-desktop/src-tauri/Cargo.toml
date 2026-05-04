@@ -2,14 +2,30 @@
 name = "aegis-desktop"
 version = "0.1.0"
 edition = "2021"
+description = "Aegis Desktop — Tauri shell for HispanShield OS UI"
+license = "Proprietary"
 
 [build-dependencies]
 tauri-build = { version = "1.5", features = [] }
 
 [dependencies]
-tauri = { version = "1.5", features = [ "api-all" ] }
-tauri::api::process::restart = "^1"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.11", features = ["json"] }
+# Tauri 1.x with the smallest possible surface area.
+# We do NOT enable api-all / shell-open / dialog-all / http-all /
+# notification-all. The frontend talks to aegis-sentinel ONLY through
+# the typed `send_command` / `get_telemetry` / `get_audit_log` IPC
+# handlers defined in `src/main.rs`.
+tauri = { version = "1.6", features = ["shell-execute", "fs-read-file"] }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# rustls-tls (no openssl) → no system libssl-dev requirement,
+# clean cross-compilation, smaller attack surface.
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+
+tokio = { version = "1", features = ["sync", "time", "rt-multi-thread", "macros"] }
+
+[features]
+# Default features mirror what tauri-build emits.
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

@@ -1,20 +1,18 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
-
 :root {
-  --os-bg: #000000;
-  --glass-bg: rgba(20, 20, 25, 0.65);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --glass-blur: blur(24px);
-  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --os-bg: #050505;
+  --glass-bg: rgba(20, 20, 25, 0.85);
+  --glass-border: rgba(255, 170, 0, 0.2);
+  --glass-blur: blur(8px);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
   
-  --accent-color: #007AFF; /* Mac Blue */
+  --accent-color: #FFAA00; /* Tactical Amber */
   --alert-color: #FF3B30;
-  --success-color: #34C759;
+  --success-color: #FFAA00; /* Replaced green with amber for consistency */
   
   --text-primary: #FFFFFF;
-  --text-secondary: rgba(255, 255, 255, 0.6);
-  --font-main: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --text-secondary: rgba(255, 255, 255, 0.85); /* Improved contrast > 7.1 */
+  --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: monospace;
 }
 
 * {
@@ -76,4 +74,14 @@ body {
   border-radius: 50%;
   background-color: var(--success-color);
   animation: pulseGlow 2s infinite;
+}
+
+.critical-pattern {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 59, 48, 0.1),
+    rgba(255, 59, 48, 0.1) 10px,
+    transparent 10px,
+    transparent 20px
+  );
 }

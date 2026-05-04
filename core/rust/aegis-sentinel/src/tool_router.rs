@@ -1,6 +1,8 @@
 use aegis_gatekeeper::{PolicyEngine, ToolPolicy};
 use serde_json::Value;
 use tracing::{info, warn, error};
+use std::collections::HashMap;
+use std::process::Command;
 
 pub struct StrictToolRouter {
     policy_engine: PolicyEngine,
@@ -15,7 +17,8 @@ impl StrictToolRouter {
     pub fn process_llm_output(&self, llm_response_text: &str) -> (bool, String) {
         match serde_json::from_str::<Value>(llm_response_text) {
             Ok(payload) => {
-                if let Some(tool_name) = payload.get("tool").and_then(|v| v.as_str()) {
+                if let Some(raw_tool_name) = payload.get("tool").and_then(|v| v.as_str()) {
+                    let tool_name = raw_tool_name.replace(|c: char| !c.is_ascii_alphanumeric() && c != '_', "");
                     info!(target: "tool_router", "Routing tool request: {}", tool_name);
                     
                     // Check for restricted military tools
@@ -49,9 +52,9 @@ impl StrictToolRouter {
                     (false, "ERROR: No tool field in JSON.".to_string())
                 }
             }
-            Err(e) => {
-                error!(target: "tool_router", "Invalid JSON response (anti-injection): {}", e);
-                (false, format!("ERROR: Invalid JSON format: {}", e))
+            Err(_) => {
+                error!(target: "tool_router", "Invalid JSON response (anti-injection)");
+                (false, "ERROR: Invalid JSON format".to_string())
             }
         }
     }
@@ -59,7 +62,13 @@ impl StrictToolRouter {
     /// Execute actual tool (calls active defense modules)
     fn execute_tool(&self, tool_name: &str, args: &HashMap<String, String>) -> String {
         match tool_name {
-            "nmap_scan" => format!("Nmap scan launched on target: {}", args.get("target").unwrap_or(&"unknown".to_string())),
+            "nmap_scan" => {
+                let target = args.get("target").unwrap_or(&"127.0.0.1".to_string());
+                match Command::new("/usr/bin/nmap").arg(target).output() {
+                    Ok(output) => format!("Nmap scan completed: {}", String::from_utf8_lossy(&output.stdout)),
+                    Err(e) => format!("Nmap scan failed: {}", e)
+                }
+            },
             "nuclei_scan" => format!("Nuclei vulnerability scan started"),
             "openvas_scan" => format!("OpenVAS vulnerability assessment initiated"),
             "john_crack" => format!("John the Ripper password audit started (authorized)"),

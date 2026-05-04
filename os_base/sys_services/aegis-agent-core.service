@@ -5,7 +5,7 @@ Wants=aegis-llm-runtime.service
 
 [Service]
 Type=simple
-User=root
+User=aegis_admin
 WorkingDirectory=/opt/hispanshield/core/rust/aegis-sentinel
 ExecStart=/opt/hispanshield/core/rust/target/release/aegis-sentinel
 ProtectSystem=full

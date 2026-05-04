@@ -31,7 +31,7 @@ debootstrap --arch=amd64 stable "$CHROOT_DIR" http://deb.debian.org/debian/
 # 4. Inyectar el código y motores de HispanShield OS
 echo "[+] Inyectando módulos locales de HispanShield..."
 mkdir -p "$CHROOT_DIR/opt/hispanshield"
-cp -r ../core ../installer ../os_base ../tools_contracts ../ui "$CHROOT_DIR/opt/hispanshield/"
+cp -r ../core ../installer ../os_base ../ui "$CHROOT_DIR/opt/hispanshield/"
 
 # 5. Configuración de Chroot (Kernel, drivers e instalación interna)
 echo "[+] Chrooting para aplicar Hardening y Scripts de instalador..."
@@ -83,9 +83,9 @@ mksquashfs "$CHROOT_DIR" "$IMAGE_DIR/live/filesystem.squashfs" -e boot
 # 7. Copiar Kernel al live media (Secure Boot signed)
 cp "$CHROOT_DIR/boot/vmlinuz-"* "$IMAGE_DIR/live/vmlinuz"
 cp "$CHROOT_DIR/boot/initrd.img-"* "$IMAGE_DIR/live/initrd"
-# Copy Secure Boot keys to ISO for verification
+# Secure Boot keys flow moved to offline HSM. Do not copy private keys to ISO.
 mkdir -p "$IMAGE_DIR/boot/secureboot"
-cp -r "$CHROOT_DIR/etc/secureboot/keys" "$IMAGE_DIR/boot/secureboot/"
+# Removed insecure copying of db.crt and db.der to public ISO.
 
 # 8. Configurar GRUB de ARRANQUE (Secure Boot + TPM + LUKS)
 cat << 'EOF' > "$IMAGE_DIR/boot/grub/grub.cfg"
@@ -111,10 +111,7 @@ EOF
 
 # 9. Generar el archivo .iso booteable
 echo "[+] Empaquetando ISO Híbrida con xorriso..."
-xorriso -as mkisofs \
-    -r -J -b boot/grub/i386-pc/eltorito.img \
-    -no-emul-boot -boot-load-size 4 -boot-info-table \
-    -o "$ISO_NAME" "$IMAGE_DIR"
+grub-mkrescue -o "$ISO_NAME" "$IMAGE_DIR"
 
 echo "==============================================================="
 echo "COMPLETADO: $ISO_NAME ha sido generado exitosamente."

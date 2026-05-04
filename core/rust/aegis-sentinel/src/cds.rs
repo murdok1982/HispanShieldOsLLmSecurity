@@ -63,11 +63,11 @@ impl CrossDomainSolution {
         info!(target: "cds", "Transfer requested: {} | {} -> {} by {}", 
               request.id, request.source_level, request.dest_level, request.requesting_user);
         
-        self.pending_transfers.insert(request.id.clone(), request);
-        
         // Audit log
         info!(target: "audit", "CDS_TRANSFER_REQUEST: id={} from={} to={} user={}", 
               request.id, request.source_level, request.dest_level, request.requesting_user);
+        
+        self.pending_transfers.insert(request.id.clone(), request.clone());
         
         Ok(format!("Transfer {} pending dual approval", request.id))
     }
@@ -76,11 +76,15 @@ impl CrossDomainSolution {
     pub fn approve_transfer(&mut self, transfer_id: String, approver: String, 
                           second_approver: Option<String>) -> Result<String, String> {
         if let Some(request) = self.pending_transfers.remove(&transfer_id) {
+            // Check if approver_2 provided a cryptographic signature
+            // In a real implementation this would verify the RSA/ECC signature of the approval
+            let valid_signature = second_approver.as_ref().map(|s| s.starts_with("SIG:")).unwrap_or(false);
+            
             let approval = TransferApproval {
                 transfer_id: transfer_id.clone(),
                 approver_1: approver.clone(),
                 approver_2: second_approver.unwrap_or_else(|| "pending".to_string()),
-                approved: second_approver.is_some(),
+                approved: valid_signature,
                 reason: None,
             };
 

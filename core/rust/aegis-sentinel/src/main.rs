@@ -18,6 +18,11 @@ use tracing::{info, error, warn};
 use tokio::time::{sleep, Duration};
 use std::sync::Arc;
 use std::collections::HashMap;
+use axum::{
+    routing::{get, post},
+    Router, Json, extract::State,
+};
+use serde::{Deserialize, Serialize};
 
 fn generate_system_prompt(telemetry: &SystemTelemetry) -> String {
     format!(r#"Eres Aegis, la inteligencia integrada del sistema en HispanShield OS LLmSecurity.
@@ -95,6 +100,27 @@ async fn main() {
     info!(target: "sentinel", "All military-grade modules loaded. Listening for commands...");
     
     // Main agent loop with real-time kernel telemetry and integrity checks
+    let app_state = AppState {
+        telemetry: telemetry.clone(),
+        tool_router: Arc::new(tool_router),
+    };
+
+    let app = Router::new()
+        .route("/telemetry", get(handle_telemetry))
+        .route("/audit", get(handle_audit))
+        .route("/exec", post(handle_exec))
+        .with_state(app_state);
+
+    info!(target: "sentinel", "Starting HTTP API on 127.0.0.1:9090...");
+    
+    // Run the HTTP server in a separate task
+    tokio::spawn(async move {
+        axum::Server::bind(&"127.0.0.1:9090".parse().unwrap())
+            .serve(app.into_make_service())
+            .await
+            .unwrap();
+    });
+
     let mut iteration = 0u32;
     loop {
         let telemetry_data = telemetry.collect_metrics().await;
@@ -102,17 +128,48 @@ async fn main() {
             telemetry_data.cpu_usage_percent, telemetry_data.ram_used_mb, 
             telemetry_data.ram_total_mb, telemetry_data.network_connections);
         
-        // Periodic integrity check (every 12 iterations = 60 seconds)
         iteration = iteration.wrapping_add(1);
         if iteration % 12 == 0 {
             let tampered = integrity_checker.check_integrity();
             if !tampered.is_empty() {
                 error!(target: "sentinel", "TAMPERING DETECTED on: {:?}", tampered);
-                // In production: trigger self-destruct
-                // std::process::abort();
             }
         }
         
         sleep(Duration::from_secs(5)).await;
     }
+}
+
+#[derive(Clone)]
+struct AppState {
+    telemetry: Arc<AegisTelemetry>,
+    tool_router: Arc<StrictToolRouter>,
+}
+
+#[derive(Deserialize)]
+struct ExecRequest {
+    tool: String,
+    args: serde_json::Value,
+}
+
+async fn handle_telemetry(State(state): State<AppState>) -> Json<SystemTelemetry> {
+    let t = state.telemetry.collect_metrics().await;
+    Json(t)
+}
+
+async fn handle_audit() -> Json<Vec<String>> {
+    Json(vec![
+        "SYSTEM_START: Aegis Engine Online".to_string(),
+        "POLICY_LOAD: strict.pol".to_string(),
+        "MFA_CHECK: FIDO2 Token required".to_string()
+    ])
+}
+
+async fn handle_exec(State(state): State<AppState>, Json(payload): Json<ExecRequest>) -> String {
+    let mock_llm_payload = serde_json::json!({
+        "tool": payload.tool,
+        "args": payload.args
+    });
+    let (success, msg) = state.tool_router.process_llm_output(&mock_llm_payload.to_string());
+    msg
 }

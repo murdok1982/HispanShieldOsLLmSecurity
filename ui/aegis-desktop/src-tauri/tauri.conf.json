@@ -1,9 +1,11 @@
 {
+  "$schema": "https://schema.tauri.app/config/1",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
-    "devPath": "../dist",
-    "distDir": "../dist"
+    "devPath": "http://localhost:5173",
+    "distDir": "../dist",
+    "withGlobalTauri": false
   },
   "package": {
     "productName": "Aegis Desktop",
@@ -14,41 +16,54 @@
       "all": false,
       "shell": {
         "all": false,
-        "open": true
+        "open": false,
+        "execute": false,
+        "scope": []
       },
       "fs": {
         "all": false,
         "readFile": true,
-        "writeFile": true,
-        "scope": ["$APPDATA/**", "$APPCONFIG/**"]
+        "writeFile": false,
+        "scope": [
+          "$APPDATA/aegis/config.json",
+          "$APPDATA/aegis/sessions/*"
+        ]
       }
     },
     "bundle": {
       "active": true,
       "targets": "all",
-      "identifier": "com.hispanshield.aegis",
+      "identifier": "es.hispanshield.aegis-desktop",
       "icon": [
         "icons/32x32.png",
         "icons/128x128.png",
         "icons/128x128@2x.png",
         "icons/icon.icns",
         "icons/icon.ico"
-      ]
+      ],
+      "shortDescription": "Aegis Security Center",
+      "longDescription": "Aegis Desktop — UI shell of HispanShield OS LLM Security."
     },
     "security": {
-      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'"
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' http://127.0.0.1:9090 ws://127.0.0.1:9090; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+      "freezePrototype": true,
+      "dangerousDisableAssetCspModification": false
     },
     "windows": [
       {
         "title": "Aegis Security Center",
         "width": 1200,
         "height": 800,
+        "minWidth": 960,
+        "minHeight": 640,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "fileDropEnabled": false
       }
     ],
     "systemTray": {
       "iconPath": "icons/icon.png",
+      "iconAsTemplate": true,
       "tooltip": "Aegis Security Center"
     }
   }

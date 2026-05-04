@@ -116,10 +116,7 @@ EOF
 
 # 9. Generate Edge ISO
 echo "[+] Packaging Edge Tactical ISO..."
-xorriso -as mkisofs \
-    -r -J -b boot/grub/i386-pc/eltorito.img \
-    -no-emul-boot -boot-load-size 4 -boot-info-table \
-    -o "$ISO_NAME" "$IMAGE_DIR"
+grub-mkrescue -o "$ISO_NAME" "$IMAGE_DIR"
 
 echo "==============================================================="
 echo "COMPLETADO: $ISO_NAME generado para dispositivos tácticos."

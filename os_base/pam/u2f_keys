@@ -1,5 +1,5 @@
 # U2F/FIDO2 Key mapping for HispanShield OS Military Users
 # Format: <username>:<keyHandle1>,<keyHandle2>:<publicKey1>,<publicKey2>
 
-aegis_admin:default:default
-aegis_agent:default:default
+# IMPORTANT: Provision FIDO2 keys using pamu2fcfg before deployment.
+# Run: pamu2fcfg -u aegis_admin > /etc/hispanshield/pam/u2f_keys

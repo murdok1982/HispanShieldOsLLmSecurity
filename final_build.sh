@@ -18,7 +18,7 @@ fi
 
 # 2. Compile Rust core components (Military Grade - Memory Safe)
 echo "[+] Compiling Rust core components..."
-cd /mnt/c/Users/USUARIO/Desktop/proyectos/ActualizacionProyectos/HispanShieldOsLLmSecurity/core/rust
+cd "$(dirname "$0")"/core/rust
 
 cargo build --release
 if [ $? -eq 0 ]; then
@@ -31,7 +31,7 @@ fi
 
 # 3. Build Standard ISO (8GB+ RAM)
 echo "[+] Building standard ISO..."
-cd /mnt/c/Users/USUARIO/Desktop/proyectos/ActualizacionProyectos/HispanShieldOsLLmSecurity
+cd "$(dirname "$0")"
 sudo ./build_iso.sh
 
 # 4. Build Edge Tactical ISO (4GB RAM)

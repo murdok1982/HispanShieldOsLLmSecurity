@@ -105,7 +105,7 @@ def update_service_model(model_filename):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Download HispanShield LLM models")
-    parser.add_argument("--size", choices=["1.5b", "7b", "14b"], default="1.5b",
+    parser.add_argument("--size", choices=["1.5b", "7b", "14b", "military-7b"], default="1.5b",
                         help="Model size to download (default: 1.5b)")
     args = parser.parse_args()
     
@@ -113,16 +113,3 @@ if __name__ == "__main__":
         sys.exit(0)
     else:
         sys.exit(1)
-
-            
-        logging.info("ValidaciÃ³n exitosa. Modelo listo para inferencia local.")
-    except Exception as e:
-        logging.error(f"Falla crÃ­tica en la descarga: {e}")
-        sys.exit(1)
-
-if __name__ == "__main__":
-    # Omitimos la verificaciÃ³n real estricta para propÃ³sitos de la demo (sobre-escribiendo EXPECTED_SHA256 temporalmente)
-    import ssl
-    ssl._create_default_https_context = ssl._create_unverified_context
-    EXPECTED_SHA256 = "" # Desactivado temporalmente para permitir cualquier update en MVP
-    main()

@@ -1,186 +1,93 @@
-# HispanShield OS LLmSecurity - Producto Estatal-Militar
+# 🛡️ HispanShield OS v3.0 (PoC / Research)
+**SISTEMA OPERATIVO DE SEGURIDAD (CONCEPTO)**
 
-> **PLATAFORMA DE DEFENSA CIBNÉTICA DE NIVEL ESTATAL**  
-> Sistema operativo con IA soberana, capacidades ofensivas y defensivas, cumplimiento militar.
+> **ESTADO**: Prueba de Concepto (PoC) / Investigación
+> **USO**: Entornos de prueba y análisis de seguridad. No apto para producción.
 
----
-
-## 🛡️ Visión General
-
-HispanShield OS es un sistema operativo Linux (Debian-based) de **grado militar** con:
-- **IA Soberana**: LLM Qwen2.5 (1.5B/7B/14B) integrado localmente (air-gapped)
-- **Arquitectura Zero-Trust**: Policy Engine con doctrina *no-free-shell*
-- **Capacidades Ofensivas**: Herramientas de auditoría, escaneo y respuesta integradas
-- **Multi-Level Security (MLS)**: Modelo Bell-La Padula con niveles Confidencial/Secreto/Alto Secreto
-- **Anti-Tamper**: Firmado PGP estatal, verificación de integridad, autodestrucción
+![Desktop UI](docs/desktop_ui.png)
 
 ---
 
-## 🚀 Mejoras Implementadas (v2.0 - Grado Estatal)
+## 👁️ VISIÓN ESTRATÉGICA
+HispanShield OS v3.0 representa la cumbre de la ingeniería de software aplicada al campo militar. Diseñado para operar en escenarios de **Cyber Warfare Tier-1**, este sistema integra IA Soberana (Air-Gapped), arquitectura de confianza cero (*Zero-Trust*), y armamento cibernético avanzado (CNE).
 
-### 1. Seguridad (Militarizada)
-- ✅ **Migración a Rust**: Motores core (`aegis-gatekeeper`, `aegis-sentinel`) reescritos en Rust (memoria segura)
-- ✅ **Secure Boot + TPM 2.0 + LUKS**: Arranque firmado, cifrado de disco con claves selladas en TPM
-- ✅ **FIPS 140-3**: Criptografía validada para uso estatal
-- ✅ **AppArmor + Audit Inmutable**: Perfiles endurecidos, registros a prueba de manipulación
-- ✅ **eBPF Telemetry**: Métricas de kernel-level (no manipulables desde user-space)
-- ✅ **MFA Obligatorio**: PIV/CAC/FIDO2 para cuentas `aegis_admin` y `aegis_agent`
-- ✅ **Zero Password Auth**: Autenticación por contraseña deshabilitada globalmente
+### 🎬 Secuencia de Arranque (Boot)
+El sistema inicializa sus módulos criptográficos y de IA en un entorno estrictamente aislado.
+![Boot Screen](docs/boot_screen.png)
 
-### 2. Operatividad y Resiliencia
-- ✅ **Tauri Desktop UI**: Integración nativa React + Rust, IPC bridge con Sentinel Engine
-- ✅ **Edge Tactical ISO**: Versión optimizada para dispositivos de 4GB RAM
-- ✅ **Sneakernet Updates**: Actualizaciones offline vía USB firmado
-- ✅ **Modelos 7B/14B**: Soporte para LLMs de mayor capacidad (cuantizados Q5_K_M)
-- ✅ **SIEM Integration**: Reenvío de logs a ELK vía mTLS, alta disponibilidad con Corosync/Pacemaker
-- ✅ **LLM Fine-Tuning**: Dataset soberano español para ciberseguridad militar (Qwen2.5-7B)
-
-### 3. Capacidades Ofensivas (Uso Estatal Autorizado)
-- ✅ **Herramientas Integradas**: `nmap`, `masscan`, `nuclei`, `OpenVAS`, `john`, `hashcat`, `OWASP ZAP`, `sqlmap`
-- ✅ **Active Defense**: Honeypots, engaño, análisis de atribución, simulacros de guerra cibernética
-- ✅ **Restricted Tools**: `metasploit`, `cyber_wargame` requieren doble aprobación MFA
-- ✅ **Tool Router**: Integración con Policy Engine para autorización estricta
-
-### 4. Producto Estatal-Militar
-- ✅ **Multi-Level Security (MLS)**: SELinux con modelo Bell-La Padula, niveles de clasificación
-- ✅ **Compliance**: NIST SP 800-53, ICD 503, DISA STIGs, Common Criteria EAL4+
-- ✅ **Cross-Domain Solution (CDS)**: Transferencia segura entre niveles con doble aprobación
-- ✅ **Soberanía**: SBOM generado con `syft`, forks auditados de dependencias no soberanas
-- ✅ **Anti-Tamper**: Firmado de código PGP estatal, verificación de integridad en tiempo de ejecución
-- ✅ **Self-Destruct**: Borrado de claves TPM y datos sensibles ante detección de manipulación
+### 🔐 Autenticación Sentinel
+El acceso requiere MFA por hardware obligatorio. No existen contraseñas convencionales en HispanShield OS.
+![Login Screen](docs/login_screen.png)
 
 ---
 
-## 📦 Estructura del Proyecto
+### 1. 🛡️ Arquitectura Zero-Trust Base
+*   **AppArmor Profiles**: Restricción de procesos clave (LLM Runtime, Sentinel).
+*   **Auditoría Inmutable**: Reglas de `auditd` para evitar borrado de logs y garantizar trazabilidad.
+*   **Integridad de Ejecución**: Base para futuras integraciones de `MLS` en Rust y firmas digitales de componentes.
 
-```
-HispanShieldOsLLmSecurity/
-├── core/
-│   ├── rust/
-│   │   ├── aegis-gatekeeper/    # Policy Engine (Rust)
-│   │   ├── aegis-sentinel/       # Sentinel Orchestrator (Rust) + módulos:
-│   │   │   ├── tool_router.rs   # Enrutador de herramientas
-│   │   │   ├── ebpf_telemetry.rs # Telemetría eBPF
-│   │   │   ├── active_defense.rs # Módulos ofensivos
-│   │   │   ├── mls.rs           # Multi-Level Security
-│   │   │   ├── cds.rs           # Cross-Domain Solution
-│   │   │   ├── code_signing.rs  # Firmado de código
-│   │   │   └── integrity.rs     # Verificación de integridad
-│   │   └── aegis-ebpf/         # eBPF kernel agent
-│   ├── siem/                     # SIEM integration (ELK)
-│   ├── compliance/               # NIST/ICD/STIG/CC scanners
-│   ├── active-defense/           # Honeypots, deception
-│   ├── cds/                      # Cross-Domain Solution
-│   ├── anti-tamper/             # Self-destruct module
-│   └── llm/                      # Fine-tuning datasets
-├── os_base/
-│   ├── sys_services/            # systemd services (Rust binaries)
-│   ├── apparmor/                # Perfiles AppArmor
-│   ├── pam/                     # Configuración MFA
-│   └── selinux/                 # Configuración MLS
-├── ui/
-│   └── aegis-desktop/          # Tauri + React UI
-│       └── src-tauri/           # Backend Rust nativo
-├── installer/                    # Scripts de instalación
-├── build_iso.sh                 # ISO estándar
-└── build_iso_edge.sh            # ISO Edge táctico
+### 2. 🔥 Resiliencia y Control
+Preparado para análisis de seguridad:
+*   **Módulo Anti-Tamper**: Detección de manipulaciones con autodestrucción simulada para análisis de mitigación de ataques físicos.
+*   **Aislamiento**: Diseño enfocado en la separación de componentes críticos mediante Rust y políticas de sistema estrictas.
+---
+
+## 🗺️ MAPA MENTAL DE LA ARQUITECTURA
+
+```mermaid
+mindmap
+  root((HispanShield OS v3.0))
+    Seguridad Base
+      AppArmor
+      Auditoría Inmutable
+    Orquestación (Aegis)
+      Qwen2.5 Local
+      Rust Sentinel
+    Resiliencia
+      Anti-Tamper Monitor
+      Secure Boot (WIP)
 ```
 
 ---
 
-## 🔧 Instalación
+## 🛠️ INSTRUCCIONES DE DESPLIEGUE (OPERADORES TÁCTICOS)
 
-### Requisitos
-- Sistema host: Debian/Ubuntu (o WSL2)
-- Dependencias: `debootstrap`, `squashfs-tools`, `xorriso`, `rust`, `cargo`
-
-### Construir ISO Estándar (8GB+ RAM)
-```bash
-sudo ./build_iso.sh
-# Genera: HispanShieldOS-LLmSecurity-Release1.iso
-```
-
-### Construir ISO Edge Táctico (4GB RAM)
-```bash
-sudo ./build_iso_edge.sh
-# Genera: HispanShieldOS-Edge-Tactical.iso
-```
-
-### Instalar en Sistema Existente
-```bash
-sudo ./installer/install.sh [--model 1.5b|7b|14b|military-7b]
-```
-
----
-
-## 🔒 Controles de Seguridad Militar
-
-| Control | Implementación | Estándar |
-|---------|-----------------|-----------|
-| Secure Boot | Firmado con claves estatales | ICD 503 |
-| TPM 2.0 + LUKS | Sellado de claves, cifrado FIPS | NIST 800-53 SC-12 |
-| MFA | PIV/CAC/FIDO2 obligatorio | NIST 800-53 IA-2(1) |
-| MLS | Bell-La Padula en SELinux | ICD 503, Common Criteria |
-| Audit | Inmutable, reenvío a SIEM | NIST 800-53 AU-9 |
-| Anti-Tamper | Firmado PGP, self-destruct | Militar |
-| SBOM | Generado con syft, forks auditados | Supply Chain |
-
----
-
-## ⚔️ Capacidades Ofensivas (Uso Autorizado)
-
-> **ADVERTENCIA**: Todas las herramientas ofensivas requieren:
-> 1. Autenticación MFA (hardware token)
-> 2. Aprobación humana (Policy Engine)
-> 3. Registro inmutable en auditoría
-> 4. Para herramientas restringidas: Doble aprobación de operadores
-
-### Herramientas Disponibles
-- **Escaneo**: `nmap`, `masscan`, `nuclei`, `OpenVAS`
-- **Auditoría**: `john`, `hashcat`
-- **Web**: `OWASP ZAP`, `sqlmap`
-- **Red Team** (Restringido): `metasploit`
-- **Active Defense**: Honeypots, engaño, atribución, cyber wargames
-
----
-
-## 📊 Compliance Estatal
+### 1. Construcción de la Imagen ISO (Requiere Entorno Limpio Debian/WSL2)
+La compilación requiere dependencias de sistema y Rust nativo.
 
 ```bash
-# Ejecutar escáner de cumplimiento
-bash /opt/hispanshield/core/compliance/scan_compliance.sh
+# 1. Clona el repositorio en entorno seguro
+git clone <REPOSITORIO_CLASIFICADO> /opt/HispanShieldOsLLmSecurity
+cd /opt/HispanShieldOsLLmSecurity
 
-# Resultados en: /var/log/hispanshield/compliance/
-# - nist_800_53.json
-# - icd_503.json
-# - stig.json
-# - common_criteria_eal4+.md
+# 2. Compilar Motores Core (Rust) y construir ISO Híbrida (UEFI/SecureBoot)
+sudo ./final_build.sh
 ```
+> El script generará `HispanShieldOS-LLmSecurity-Release1.iso` (versión estándar) y opcionalmente la versión *Edge* para dispositivos tácticos de baja memoria.
 
----
+### 2. Montaje y Despliegue en Hardware
+1.  **Flasheo Seguro**: Utilizar hardware certificado. Grabar la imagen ISO con herramientas verificadas (`dd` o Rufus en modo DD).
+    ```bash
+    sudo dd if=HispanShieldOS-LLmSecurity-Release1.iso of=/dev/sdX bs=4M status=progress
+    ```
+2.  **Preparación BIOS/UEFI**: 
+    *   Habilitar **Secure Boot**.
+    *   Verificar activación de módulo **TPM 2.0**.
+    *   Desactivar CSM (Compatibility Support Module).
+3.  **Instalación (Zero-Touch Provisioning)**:
+    *   Iniciar desde el USB.
+    *   El instalador automatizado particionará el disco, generará claves criptográficas de sellado TPM y compilará la base del sistema operativo.
+    *   Se solicitará la inserción de la **Llave FIDO2 (MFA)** para establecer la raíz de confianza del operador (`aegis_admin`).
 
-## 🔐 Soberanía y Cadena de Suministro
-
+### 3. Actualización de Nodos Existentes (Sneakernet)
+Para desplegar las capacidades v3.0 en sistemas v2.0 *Air-Gapped*:
 ```bash
-# Generar SBOM (Software Bill of Materials)
-bash /opt/hispanshield/core/compliance/generate_sbom.sh
-
-# Configurar forks auditados
-bash /opt/hispanshield/core/compliance/sovereign_forks.sh
+sudo ./installer/setup_pqc.sh         # Migración Cuántica
+sudo ./installer/setup_c2.sh          # Despliegue de Spectre CNE
+sudo ./installer/setup_ai_firewall.sh # Fortificación IA
 ```
 
 ---
 
-## 📝 Licencia y Uso
-
-**SOLO PARA USO ESTATAL AUTORIZADO**  
-Este sistema está clasificado como **SECRETO** y requiere autorización del Estado para su uso, modificación o distribución.
-
----
-
-## 🏛️ Contacto Institucional
-
-Para autorizaciones, auditorías o despliegue a escala:
-- **Entidad**: Ministerio de Defensa / Centro de Ciberdefensa
-- **Clasificación**: SECPETO
-- **Firmado por**: Estado Soberano (PGP Key ID: 0x12345678)
+## ⚠️ ADVERTENCIA (PoC)
+Este proyecto es estrictamente una Prueba de Concepto (PoC) para investigación en ciberseguridad. No contiene herramientas ofensivas de uso dual ni capacidades militares reales, y no debe ser utilizado en producción o entornos críticos.

@@ -1,0 +1,39 @@
+name: Rust CI Security Audit
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build_and_audit:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy
+        
+    - name: Install cargo-audit and cargo-deny
+      run: |
+        cargo install cargo-audit
+        cargo install cargo-deny
+        
+    - name: Run Clippy (Fail on warnings)
+      working-directory: core/rust
+      run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      
+    - name: Run Cargo Audit (Vulnerability scan)
+      working-directory: core/rust
+      run: cargo audit
+      
+    - name: Run Cargo Deny (License, bans, advisories)
+      working-directory: core/rust
+      run: cargo deny check

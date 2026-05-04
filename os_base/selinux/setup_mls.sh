@@ -6,17 +6,15 @@ set -euo pipefail
 
 log() { echo -e "\e[1;35m[MLS/SELinux]\e[0m $1"; }
 
-# Install SELinux with MLS support
+# Install SELinux with MLS support (RHEL/Fedora base)
 install_selinux_mls() {
-    log "Installing SELinux with MLS policy..."
-    apt-get update && apt-get install -y \
-        selinux-basics \
-        selinux-policy-default \
+    log "Installing SELinux with MLS policy (RHEL/Fedora)..."
+    dnf update -y && dnf install -y \
         selinux-policy-mls \
-        auditd \
-        checkpolicy \
+        audit \
         policycoreutils \
-        policycoreutils-python-utils
+        policycoreutils-python-utils \
+        setools-console
     
     # Switch to MLS policy
     sed -i 's/^SELINUXTYPE=.*/SELINUXTYPE=mls/' /etc/selinux/config

@@ -23,7 +23,7 @@ export default function TopBar() {
       fontSize: '13px',
       fontWeight: 500,
       position: 'absolute',
-      top: 0,
+      top: 24,
       zIndex: 9999
     }}>
       <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
