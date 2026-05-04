@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "aegis-gatekeeper",
+    "aegis-sentinel",
+]

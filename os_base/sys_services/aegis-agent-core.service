@@ -1,25 +1,22 @@
 [Unit]
-Description=HispanShield OS LLmSecurity Sentinel Engine (Agent Core)
-After=aegis-llm-runtime.service aegis-observer.service
-Requires=aegis-llm-runtime.service
+Description=Aegis Sentinel Engine Orchestrator (Rust)
+After=aegis-llm-runtime.service
+Wants=aegis-llm-runtime.service
 
 [Service]
 Type=simple
 User=root
-# El core del agente corre protegido para poder orquestar tareas crÃ­ticas, PERO tira privilegios antes de interactuar con el LLM
-WorkingDirectory=/opt/HispanShield OS LLmSecurity/core/sentinel_engine
-ExecStart=/usr/bin/python3 main.py
-
-# Aislamientos (Hardening)
+WorkingDirectory=/opt/hispanshield/core/rust/aegis-sentinel
+ExecStart=/opt/hispanshield/core/rust/target/release/aegis-sentinel
 ProtectSystem=full
-# SÃ³lo tiene permisos de escritura sobre su base auditora
-ReadWritePaths=/var/log/HispanShield OS LLmSecurity /opt/HispanShield OS LLmSecurity/core/data
 PrivateTmp=true
-NoNewPrivileges=false
-
-Restart=on-failure
-RestartSec=10
-TimeoutStopSec=30
+ReadOnlyPaths=/etc
+ReadWritePaths=/var/log/hispanshield /opt/hispanshield/core/data
+AmbientCapabilities=
+NoNewPrivileges=true
+SystemCallFilter=~@mount @raw-io @debug @privileged
+AppArmorProfile=/opt.hispanshield.core.rust.aegis-sentinel
+AuditMode=yes
 
 [Install]
 WantedBy=multi-user.target

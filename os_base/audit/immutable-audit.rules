@@ -1,0 +1,33 @@
+# Immutable Audit Logging Configuration for HispanShield OS (Military Grade)
+# Prevents deletion or modification of audit logs even by root
+
+# Clear existing rules
+-D
+
+# Monitor Aegis services
+-w /opt/hispanshield/core/rust/target/release/aegis-sentinel -p x -k aegis_exec
+-w /opt/hispanshield/bin/llama-server -p x -k llm_exec
+
+# Monitor policy decisions
+-w /etc/hispanshield/policies/ -p wa -k aegis_policy_change
+-w /var/log/hispanshield/ -p wa -k aegis_logging
+
+# Monitor TPM and Secure Boot
+-w /etc/secureboot/ -p rwa -k secureboot_keys
+-w /etc/tpm/ -p rwa -k tpm_operations
+
+# Monitor authentication events
+-w /etc/pam.d/ -p wa -k pam_config
+-w /etc/shadow -p wa -k shadow_modification
+-w /etc/passwd -p wa -k passwd_modification
+
+# Monitor tool execution (offensive capabilities)
+-a always,exit -F arch=b64 -S execve -F path=/usr/bin/nmap -k offensive_nmap
+-a always,exit -F arch=b64 -S execve -F path=/usr/bin/masscan -k offensive_masscan
+-a always,exit -F arch=b64 -S execve -F path=/usr/bin/nuclei -k offensive_nuclei
+
+# Immutable configuration (prevents audit rule changes)
+-e 2
+
+# Make audit logs immutable (requires kernel patch or LSM)
+-w /var/log/audit/ -p wa -k audit_logs

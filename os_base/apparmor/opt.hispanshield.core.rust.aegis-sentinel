@@ -1,0 +1,41 @@
+#include <tunables/global>
+#include <abstractions/base>
+#include <abstractions/nameservice>
+#include <abstractions/openssl>
+
+/opt/hispanshield/core/rust/target/release/aegis-sentinel {
+    capability net_bind_service,
+    capability sys_ptrace,
+    capability sys_admin,
+    
+    network inet stream,
+    network inet6 stream,
+    network unix stream,
+    
+    # Read-only access to system configs
+    /etc/hispanshield/** r,
+    /etc/secureboot/** r,
+    /etc/tpm/** r,
+    
+    # Read access to Rust core
+    /opt/hispanshield/core/rust/** r,
+    
+    # Write access only to specific log/data directories
+    /var/log/hispanshield/** rw,
+    /opt/hispanshield/core/data/** rw,
+    
+    # Unix socket for IPC
+    /run/aegis-sentinel.sock rw,
+    /run/aegis-*.sock rw,
+    
+    # Deny access to sensitive areas
+    deny /home/** rw,
+    deny /root/** rw,
+    deny @{PROC}/@{pid}/mem rw,
+    deny @{PROC}/@{pid}/cmdline rw,
+    deny /etc/shadow rw,
+    deny /etc/passwd rw,
+    
+    # Allow execution
+    /opt/hispanshield/core/rust/target/release/aegis-sentinel ix,
+}

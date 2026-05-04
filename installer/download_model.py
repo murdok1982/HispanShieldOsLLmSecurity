@@ -1,49 +1,119 @@
 #!/usr/bin/env python3
-import os
-import sys
+"""
+HispanShield OS LLmSecurity: Secure Model Downloader
+Downloads and verifies LLM models from HuggingFace with SHA256 checksum.
+Supports multiple model sizes for different deployment scenarios (Edge/Standard/Server).
+"""
 import hashlib
 import urllib.request
-import logging
+import sys
+import os
+import argparse
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - [AegisModelDL] - %(levelname)s - %(message)s')
+# Model configurations: (URL, filename, SHA256, description)
+MODELS = {
+    "1.5b": {
+        "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q5_k_m.gguf",
+        "filename": "aegis-core-1.5b.gguf",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",  # UPDATE THIS
+        "desc": "1.5B parameters - Edge devices (4GB RAM)"
+    },
+    "7b": {
+        "url": "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q5_k_m.gguf",
+        "filename": "aegis-core-7b.gguf",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",  # UPDATE THIS
+        "desc": "7B parameters - Standard deployment (8GB RAM)"
+    },
+    "14b": {
+        "url": "https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF/resolve/main/qwen2.5-14b-instruct-q5_k_m.gguf",
+        "filename": "aegis-core-14b.gguf",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",  # UPDATE THIS
+        "desc": "14B parameters - Server deployment (16GB RAM)"
+    },
+    "military-7b": {
+        "url": "file:///opt/hispanshield/models/aegis-military-7b-q5_k_m.gguf",
+        "filename": "aegis-military-7b.gguf",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",  # UPDATE AFTER FINE-TUNE
+        "desc": "7B Military Fine-Tuned - Sovereign Spanish defense (8GB RAM)"
+    }
+}
 
-# Configuramos un modelo rÃ¡pido y eficiente en RAM (Qwen 1.5B Q5_K_M)
-MODEL_URL = "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q5_k_m.gguf?download=true"
-EXPECTED_SHA256 = "d22588c22dc99bd1559868be24ad91404eeb6e89fcb3bf627def496fc3846aa1" # (Ejemplo de Hash para validaciÃ³n de seguridad)
-TARGET_DIR = "/opt/HispanShield OS LLmSecurity/models/"
-TARGET_FILE = os.path.join(TARGET_DIR, "aegis-core-1.5b.gguf")
-
-def calculate_sha256(filepath):
-    sha256_hash = hashlib.sha256()
-    with open(filepath, "rb") as f:
-        # Leemos en chunks para no saturar memoria
-        for byte_block in iter(lambda: f.read(4096), b""):
-            sha256_hash.update(byte_block)
-    return sha256_hash.hexdigest()
-
-def main():
-    if not os.path.exists(TARGET_DIR):
-        os.makedirs(TARGET_DIR, exist_ok=True)
-
-    if os.path.exists(TARGET_FILE):
-        logging.info("El modelo ya existe. Verificando integridad...")
-        current_hash = calculate_sha256(TARGET_FILE)
-        if current_hash == EXPECTED_SHA256:
-            logging.info("Integridad verificada. Descarga omitida.")
-            return
-        else:
-            logging.warning("El hash no coincide. El archivo puede estar corrupto o haya sido alterado. Redescargando...")
-
-    logging.info(f"Descargando modelo ligero avanzado (GGUF) desde el registro seguro...")
+def download_model(model_size="1.5b"):
+    if model_size not in MODELS:
+        print(f"[!] Invalid model size: {model_size}. Choose from: {', '.join(MODELS.keys())}")
+        return False
+    
+    config = MODELS[model_size]
+    MODEL_URL = config["url"]
+    MODEL_FILENAME = config["filename"]
+    EXPECTED_SHA256 = config["sha256"]
+    
+    print(f"[+] Downloading LLM model: {MODEL_FILENAME}")
+    print(f"[+] Description: {config['desc']}")
+    print(f"[+] From: {MODEL_URL}")
+    
+    # Create models directory if it doesn't exist
+    models_dir = "/opt/hispanshield/models"
+    if not os.path.exists(models_dir):
+        os.makedirs(models_dir, exist_ok=True)
+    
+    model_path = os.path.join(models_dir, MODEL_FILENAME)
+    
     try:
-        urllib.request.urlretrieve(MODEL_URL, TARGET_FILE)
-        logging.info("Descarga completada. Verificando SHA-256...")
+        # Download with progress
+        print("[+] Starting download...")
+        urllib.request.urlretrieve(MODEL_URL, model_path)
+        print(f"[+] Model downloaded to: {model_path}")
         
-        computed_hash = calculate_sha256(TARGET_FILE)
-        if computed_hash != EXPECTED_SHA256:
-            os.remove(TARGET_FILE)
-            logging.error(f"Â¡PELIGRO! VerificaciÃ³n SHA-256 fallÃ³. (Esperado: {EXPECTED_SHA256}, Obtuvimos: {computed_hash}). Archivo borrado para evitar inyecciones.")
-            sys.exit(1)
+        # Verify SHA256
+        print("[+] Verifying SHA256 checksum...")
+        sha256_hash = hashlib.sha256()
+        with open(model_path, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        
+        actual_hash = sha256_hash.hexdigest()
+        print(f"[+] Expected: {EXPECTED_SHA256}")
+        print(f"[+] Actual:   {actual_hash}")
+        
+        if actual_hash == EXPECTED_SHA256:
+            print("[+] SHA256 verification PASSED")
+            # Update the systemd service to use the downloaded model
+            update_service_model(MODEL_FILENAME)
+            return True
+        else:
+            print("[!] SHA256 verification FAILED - deleting corrupted file")
+            os.remove(model_path)
+            return False
+            
+    except Exception as e:
+        print(f"[!] Error downloading model: {e}")
+        return False
+
+def update_service_model(model_filename):
+    service_file = "/etc/systemd/system/aegis-llm-runtime.service"
+    if os.path.exists(service_file):
+        with open(service_file, 'r') as f:
+            content = f.read()
+        content = content.replace(
+            "aegis-core-1.5b.gguf",
+            model_filename
+        )
+        with open(service_file, 'w') as f:
+            f.write(content)
+        print(f"[+] Updated service to use: {model_filename}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Download HispanShield LLM models")
+    parser.add_argument("--size", choices=["1.5b", "7b", "14b"], default="1.5b",
+                        help="Model size to download (default: 1.5b)")
+    args = parser.parse_args()
+    
+    if download_model(args.size):
+        sys.exit(0)
+    else:
+        sys.exit(1)
+
             
         logging.info("ValidaciÃ³n exitosa. Modelo listo para inferencia local.")
     except Exception as e:

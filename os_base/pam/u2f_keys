@@ -1,0 +1,5 @@
+# U2F/FIDO2 Key mapping for HispanShield OS Military Users
+# Format: <username>:<keyHandle1>,<keyHandle2>:<publicKey1>,<publicKey2>
+
+aegis_admin:default:default
+aegis_agent:default:default

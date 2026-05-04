@@ -1,0 +1,31 @@
+#include <tunables/global>
+#include <abstractions/base>
+#include <abstractions/nameservice>
+
+/opt/hispanshield/bin/llama-server {
+    capability net_bind_service,
+    
+    network inet stream,
+    network inet6 stream,
+    network unix stream,
+    
+    # Read-only access to model files
+    /opt/hispanshield/models/** r,
+    /etc/hispanshield/** r,
+    
+    # Write access to logs only
+    /var/log/hispanshield/** rw,
+    
+    # Unix socket for IPC
+    /run/aegis-llm.sock rw,
+    
+    # Deny access to sensitive areas
+    deny /home/** rw,
+    deny /root/** rw,
+    deny /opt/hispanshield/core/** rw,
+    deny @{PROC}/@{pid}/mem rw,
+    deny /etc/shadow rw,
+    
+    # Allow execution
+    /opt/hispanshield/bin/llama-server ix,
+}
