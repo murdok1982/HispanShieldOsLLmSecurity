@@ -5,6 +5,7 @@ mod mls;
 mod cds;
 mod code_signing;
 mod integrity;
+mod auth;
 
 use aegis_gatekeeper::PolicyEngine;
 use tool_router::StrictToolRouter;
@@ -14,15 +15,15 @@ use cds::CrossDomainSolution;
 use code_signing::CodeSigning;
 use integrity::IntegrityChecker;
 use ebpf_telemetry::{AegisTelemetry, SystemTelemetry};
-use tracing::{info, error, warn};
+use tracing::{info, error};
 use tokio::time::{sleep, Duration};
 use std::sync::Arc;
-use std::collections::HashMap;
 use axum::{
+    middleware,
     routing::{get, post},
     Router, Json, extract::State,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 fn generate_system_prompt(telemetry: &SystemTelemetry) -> String {
     format!(r#"Eres Aegis, la inteligencia integrada del sistema en HispanShield OS LLmSecurity.
@@ -36,13 +37,22 @@ OS: HispanShield OS LLmSecurity | RAM: {}MB/{}MB | CPU: {:.1}% | Conexiones: {} 
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     // Initialize structured logging
     tracing_subscriber::fmt()
         .with_env_filter("info")
         .init();
-    
+
     info!(target: "sentinel", "Sentinel Engine Orchestrator initialized (Military-Grade State Product)");
+
+    // Load shared bearer token; refuse to start if missing or weak.
+    // Generate with: openssl rand -hex 32 > /etc/hispanshield/secrets/sentinel.token
+    if let Err(e) = auth::init_token() {
+        error!(target: "sentinel", "FATAL: {}", e);
+        std::process::exit(1);
+    }
+    info!(target: "sentinel", "Bearer token loaded; HTTP endpoints will require Authorization");
+
     info!(target: "sentinel", "Connecting to aegis-llm-runtime (llama.cpp) at 127.0.0.1:8080...");
     
     // Initialize Policy Engine with offensive tools
@@ -109,16 +119,16 @@ async fn main() {
         .route("/telemetry", get(handle_telemetry))
         .route("/audit", get(handle_audit))
         .route("/exec", post(handle_exec))
+        .layer(middleware::from_fn(auth::require_bearer_token))
         .with_state(app_state);
 
-    info!(target: "sentinel", "Starting HTTP API on 127.0.0.1:9090...");
-    
-    // Run the HTTP server in a separate task
+    info!(target: "sentinel", "Starting HTTP API on 127.0.0.1:9090 (bearer-auth required on all routes)...");
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:9090").await?;
     tokio::spawn(async move {
-        axum::Server::bind(&"127.0.0.1:9090".parse().unwrap())
-            .serve(app.into_make_service())
-            .await
-            .unwrap();
+        if let Err(e) = axum::serve(listener, app).await {
+            error!(target: "sentinel", "HTTP server error: {}", e);
+        }
     });
 
     let mut iteration = 0u32;
@@ -166,10 +176,24 @@ async fn handle_audit() -> Json<Vec<String>> {
 }
 
 async fn handle_exec(State(state): State<AppState>, Json(payload): Json<ExecRequest>) -> String {
-    let mock_llm_payload = serde_json::json!({
+    // Input validation: tool names must be ascii alphanumeric + underscore, length 1..=64.
+    if payload.tool.is_empty()
+        || payload.tool.len() > 64
+        || !payload.tool.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return "ERROR: invalid tool name".to_string();
+    }
+    // Cap args payload size; avoids abuse of large bodies through the router.
+    let args_str = payload.args.to_string();
+    if args_str.len() > 8 * 1024 {
+        return "ERROR: args payload too large".to_string();
+    }
+
+    let llm_payload = serde_json::json!({
         "tool": payload.tool,
-        "args": payload.args
+        "args": payload.args,
     });
-    let (success, msg) = state.tool_router.process_llm_output(&mock_llm_payload.to_string());
+    let (_success, msg) = state.tool_router.process_llm_output(&llm_payload.to_string());
     msg
 }
+

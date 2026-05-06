@@ -1,0 +1,101 @@
+# ----------------------------------------------------------------------------
+#  HispanShield OS — Tool allowlist (single source of truth)
+# ----------------------------------------------------------------------------
+#
+#  This file is the AUTHORITATIVE catalogue of tool names that the LLM may
+#  request through the StrictToolRouter. Two consumers must stay in sync:
+#
+#    - core/rust/aegis-gatekeeper/src/lib.rs   (production, enforcement)
+#    - core/sentinel_engine/router/tool_router.py
+#        (reference / dev harness — does NOT enforce in production)
+#
+#  Editing rules:
+#    1. Keys are [a-z0-9_]+, max 64 chars (matches the Rust validator).
+#    2. `requires_human: true` means the gatekeeper denies auto-execution and
+#       asks a human operator.
+#    3. `dual_mfa: true` adds the second-operator MFA + state-authorisation
+#       gate (Cross-Domain Solution path).
+#    4. Anything not listed here is FAIL-CLOSED at the Rust gatekeeper.
+#    5. After editing, update aegis-gatekeeper/src/lib.rs::PolicyEngine::new
+#       in the same PR. CI cargo-test will fail otherwise (see
+#       tests/allowlist_sync.rs once added in Sprint 3).
+#
+#  See: docs/architecture/ARCHITECTURE_MILITAR.md §"Tool Authorisation Path"
+# ----------------------------------------------------------------------------
+
+version: 1
+
+defensive:
+  os_process_list:
+    requires_human: false
+    dual_mfa: false
+  os_ram_status:
+    requires_human: false
+    dual_mfa: false
+  file_read_safe_zone:
+    requires_human: false
+    dual_mfa: false
+  network_firewall_block:
+    requires_human: true
+    dual_mfa: false
+  system_shutdown:
+    requires_human: true
+    dual_mfa: false
+
+offensive:
+  nmap_scan:
+    requires_human: true
+    dual_mfa: false
+  masscan_scan:
+    requires_human: true
+    dual_mfa: false
+  nuclei_scan:
+    requires_human: true
+    dual_mfa: false
+  openvas_scan:
+    requires_human: true
+    dual_mfa: false
+  john_crack:
+    requires_human: true
+    dual_mfa: false
+  hashcat_crack:
+    requires_human: true
+    dual_mfa: false
+  owasp_zap_scan:
+    requires_human: true
+    dual_mfa: false
+  sqlmap_scan:
+    requires_human: true
+    dual_mfa: false
+
+restricted:
+  metasploit_exploit:
+    requires_human: true
+    dual_mfa: true
+  honeypot_deploy:
+    requires_human: true
+    dual_mfa: true
+  deception_setup:
+    requires_human: true
+    dual_mfa: true
+  attribution_analysis:
+    requires_human: true
+    dual_mfa: true
+  cyber_wargame:
+    requires_human: true
+    dual_mfa: true
+
+compliance:
+  compliance_scan:
+    requires_human: true
+    dual_mfa: false
+
+# Runtime channel: authenticated LLM bridge used by the desktop UI (AIWidget).
+# This is neither defensive nor offensive — it is the chat ingress that the
+# operator uses to converse with the local llama-server. It is allowlisted so
+# the gatekeeper does not fail-closed on legitimate UI traffic. Authentication
+# is enforced upstream by the Tauri bearer token + llama-server --api-key.
+runtime:
+  ai_query:
+    requires_human: false
+    dual_mfa: false

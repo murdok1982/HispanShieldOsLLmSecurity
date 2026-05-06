@@ -1,0 +1,54 @@
+/*
+ * HispanShield OS — Design Tokens
+ * Doctrina: dark-only, paleta táctica (no macOS blue), tipografía mono para datos.
+ * Importado desde index.css ANTES de @tailwind para que las variables estén
+ * disponibles en utilidades arbitrarias (ej: bg-[var(--color-panel)]).
+ */
+
+:root {
+  /* Paleta táctica — clasificaciones y semántica de alerta */
+  --color-phosphor: #7BFF8A;
+  --color-amber: #FFB300;
+  --color-critical: #FF3B30;
+  --color-info: #0095FF;
+
+  --color-classif-secret: #FF6600;
+  --color-classif-top-secret: #E50000;
+  --color-classif-confidential: #1976D2;
+  --color-classif-unclassified: #1E7E34;
+
+  /* Superficies */
+  --color-bg: #0A0E12;
+  --color-panel: #10151C;
+  --color-panel-2: #161D27;
+
+  /* Texto — contraste WCAG AAA 7:1 sobre --color-bg */
+  --color-text: #F5F7FA;
+  --color-text-dim: #B5BFCC;
+  --color-text-muted: #6F7B8A;
+  --color-border: #1F2A37;
+
+  /* Tipografía */
+  --font-mono: "JetBrains Mono", "Cascadia Mono", "Fira Code", monospace;
+  --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
+
+  /* Espaciados (4-8-12-16-24-32-48-64) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  /* Sombras con tinte phosphor sutil — nunca azul macOS */
+  --shadow-panel: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 1px rgba(123, 255, 138, 0.08);
+  --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.7), 0 0 24px rgba(123, 255, 138, 0.06);
+
+  /* Z-index — orden estricto: tamper > classification > modal > toast */
+  --z-tamper: 100000;
+  --z-classification: 10000;
+  --z-modal: 9000;
+  --z-toast: 8000;
+}

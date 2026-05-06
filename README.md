@@ -1,188 +1,175 @@
-# HispanShield OS LLmSecurity - Producto Estatal-Militar (FIXED)
+# HispanShield OS LLmSecurity — PoC / Hardened Reference Architecture
 
-> **PLATAFORMA DE DEFENSA CIBERNÉTICA DE NIVEL ESTATAL**  
-> Sistema operativo con IA soberana, capacidades ofensivas y defensivas, cumplimiento militar.
-
----
-
-## ⚠️ NOTA DE CLASIFICACIÓN
-
-**ESTADO ACTUAL**: PoC / Research (Fase de auditoría)  
-**CLASIFICACIÓN**: CONFIDENCIAL (No para distribución pública)  
-**FIRMA**: En proceso de cumplimiento de normativa estatal  
-
-> **ADVERTENCIA LEGAL**: Este repositorio contiene código en fase de desarrollo.  
-> No distribuir sin autorización. Requiere auditoría de seguridad completa  
-> y cumplimiento de Ley de Secretos Oficiales antes de clasificarse como SECRETO.
+> **Hardened reference architecture** for a Linux endpoint that runs a sovereign LLM
+> behind a strict tool-calling gatekeeper. This repository is research-grade work,
+> not a production distribution.
 
 ---
 
-## 🛡️ Visión General
+## NOTA DE CLASIFICACIÓN
 
-HispanShield OS es un sistema operativo Linux (Debian-based) de **grado militar** con:
-- **IA Soberana**: LLM Qwen2.5 (1.5B/7B/14B) integrado localmente (air-gapped)
-- **Arquitectura Zero-Trust**: Policy Engine con doctrina *no-free-shell*
-- **Capacidades Ofensivas**: Herramientas de auditoría, escaneo y respuesta integradas (uso autorizado)
-- **Multi-Level Security (MLS)**: Modelo Bell-La Padula con niveles Confidencial/Secreto/Alto Secreto
-- **Anti-Tamper**: Firmado PGP estatal, verificación de integridad, protocolos de seguridad
+**ESTADO ACTUAL:** PoC / Research — auditoría externa en curso.
+**CLASIFICACIÓN:** CONFIDENCIAL (no para distribución pública).
+**FIRMA:** No firmado por autoridad estatal — claves del repositorio son de desarrollo.
 
 ---
 
-## 🚀 Mejoras Implementadas (v2.0 - Grado Estatal)
+## Visión General
 
-### 1. Seguridad (Militarizada)
-- ✅ **Migración a Rust**: Motores core (`aegis-gatekeeper`, `aegis-sentinel`) reescritos en Rust (memoria segura)
-- ✅ **Secure Boot + TPM 2.0 + LUKS**: Arranque firmado, cifrado de disco con claves selladas en TPM
-- ✅ **FIPS 140-3**: Criptografía validada para uso estatal
-- ✅ **AppArmor + Audit Inmutable**: Perfiles endurecidos, registros a prueba de manipulación
-- ✅ **eBPF Telemetry**: Métricas de kernel-level (no manipulables desde user-space)
-- ✅ **MFA Obligatorio**: PIV/CAC/FIDO2 para cuentas `aegis_admin` y `aegis_agent`
-- ✅ **Zero Password Auth**: Autenticación por contraseña deshabilitada globalmente **(FIXED: CWE-287)**
+HispanShield OS es una arquitectura de referencia (Debian-based) que combina:
 
-### 2. Operatividad y Resiliencia
-- ✅ **Tauri Desktop UI**: Integración nativa React + Rust, IPC bridge con Sentinel Engine
-- ✅ **Edge Tactical ISO**: Versión optimizada para dispositivos de 4GB RAM
-- ✅ **Sneakernet Updates**: Actualizaciones offline vía USB firmado
-- ✅ **Modelos 7B/14B**: Soporte para LLMs de mayor capacidad (cuantizados Q5_K_M)
-- ✅ **SIEM Integration**: Reenvío de logs a ELK vía mTLS, alta disponibilidad con Corosync/Pacemaker
-- ✅ **LLM Fine-Tuning**: Dataset soberano español para ciberseguridad militar (Qwen2.5-7B)
-
-### 3. Capacidades Ofensivas (Uso Estatal Autorizado)
-- ✅ **Herramientas Integradas**: `nmap`, `masscan`, `nuclei`, `OpenVAS`, `john`, `hashcat`, `OWASP ZAP`, `sqlmap` **(FIXED: D1 - Real exec)**
-- ✅ **Active Defense**: Honeypots, engaño, análisis de atribución, simulacros de guerra cibernética
-- ✅ **Restricted Tools**: `metasploit`, `cyber_wargame` requieren doble aprobación MFA
-- ✅ **Tool Router**: Integración con Policy Engine para autorización estricta
-
-### 4. Producto Estatal-Militar
-- ✅ **Multi-Level Security (MLS)**: SELinux con modelo Bell-La Padula, niveles de clasificación
-- ✅ **Compliance**: NIST SP 800-53, ICD 503, DISA STIGs, Common Criteria EAL4+
-- ✅ **Cross-Domain Solution (CDS)**: Transferencia segura entre niveles con doble aprobación **(FIXED: D2)**
-- ✅ **Soberanía (FIXED: L2-L3)**: SBOM generado con `syft`, sin references externas (OPSEC)
-- ✅ **Anti-Tamper (FIXED: B4-B5)**: Firmado de código PGP estatal, sin `default:default` keys
-- ✅ **Self-Destruct (FIXED: B4)**: Umbral elevado, sensores múltiples, desactivado por defecto
+- **LLM local** (Qwen2.5 1.5B/7B/14B vía `llama.cpp`) detrás de auth obligatoria y bind a `127.0.0.1`.
+- **Gatekeeper Rust** con allowlist estricta, validación anti-shell-metachar y separación dual-MFA para herramientas restringidas.
+- **Userland endurecido**: AppArmor, audit inmutable, PAM PIV/CAC + FIDO2, systemd hardening completo, sysctl mínimo.
+- **UI Tauri** con clasificación visible, consentimiento explícito y gate anti-tamper.
 
 ---
 
-## 📦 Estructura del Proyecto
+## Estado de implementación
+
+La auditoría de Mayo 2026 detectó overselling significativo. Esta tabla es la
+única fuente de verdad sobre qué está implementado y qué es roadmap.
+
+| Capacidad | Real | Roadmap | Notas |
+|---|:---:|:---:|---|
+| AppArmor profiles (`opt.hispanshield.*`) | ✅ | | enforced en perfiles attestables |
+| Audit inmutable (`-e 2` + `immutable-audit.rules`) | ✅ | | append-only hasta el reboot |
+| PAM stack PIV/CAC + FIDO2 (`pam_hispanshield.conf`) | ✅ | | password auth deshabilitada |
+| systemd hardening completo (todas las units `aegis-*`) | ✅ | | `LoadCredential`, syscall filter, no-cap, MLS-aware |
+| CDS HMAC dual-MFA con separación temporal | ✅ | | `core/rust/aegis-sentinel/src/cds.rs` |
+| Anti-tamper conservador (4 sensores attestables, dry-run, 2nd-stage) | ✅ | | `core/anti-tamper/self_destruct.sh` |
+| Tool router con `Command::new` arg-mode + validación | ✅ | | `tool_router.rs`, no shell strings |
+| Integrity baseline SHA256 | ✅ | | `aegis-sentinel/src/integrity.rs` |
+| fs-verity setup | ✅ | | `os_base/audit/fs-verity-setup.sh` |
+| sysctl hardening | ✅ | | `os_base/sysctl/` |
+| Llama-server con `--api-key` + bind 127.0.0.1 | ✅ | | token vía systemd `LoadCredential`, fuera de argv |
+| UI: ClassificationBanner / ConsentScreen / AntiTamperGate / ClassifiedAction 4-eyes | ✅ | | flujo nativo Tauri |
+| SELinux MLS Bell-La Padula | ⚠️ PoC | | módulo carga en Fedora/RHEL; `os_base/selinux/README.md` lista limitaciones |
+| eBPF telemetry kernel-side | ⚠️ stub | ✅ Fase 2 | `aegis-ebpf` es Fase 0; el sentinel hoy lee `/proc` |
+| PQC (Kyber / Dilithium) | | ✅ Fase 2 | `installer/setup_pqc.sh` es declarativo |
+| MicroVM / VM-isolation real para tools ofensivas | | ✅ Fase 2 | hoy: AppArmor + seccomp via systemd |
+| NeMo Guardrails runtime | | ✅ Fase 2 | guardrails actuales son del gatekeeper Rust |
+| Spectre C2 stack (Tor / I2P / domain fronting) | | ✅ Fase 2 | `setup_c2.sh` es esqueleto |
+| Hardware RoT (OpenTitan) | | ✅ Fase 3 | requiere silicio compatible |
+| TPM key sealing real (más allá de cmdline) | | ✅ Fase 2 | hoy: cmdline + LUKS, sin sellado per-PCR |
+
+---
+
+## Estructura del Proyecto
 
 ```
 HispanShieldOsLLmSecurity/
 ├── core/
-│   ├── rust/                          # ALL COMPILES (B6-B9 FIXED)
-│   │   ├── aegis-gatekeeper/        # Policy Engine (Rust) ✅
-│   │   ├── aegis-sentinel/           # Sentinel Orchestrator (Rust) ✅
-│   │   └── aegis-ebpf/              # eBPF agent (D3 FIXED: Real/fallback) ✅
-│   ├── siem/                         # SIEM integration (ELK) ✅
-│   ├── compliance/                   # NIST/ICD/STIG/CC scanners ✅
-│   ├── active-defense/               # Honeypots, deception ✅
-│   ├── cds/                          # Cross-Domain Solution ✅
-│   ├── anti-tamper/                 # Self-destruct module ✅
-│   └── llm/                          # Fine-tuning datasets ✅
+│   ├── policy/tools.yaml             # fuente única de verdad de la allowlist
+│   ├── rust/
+│   │   ├── aegis-gatekeeper/         # Policy Engine (autoritativo)
+│   │   ├── aegis-sentinel/           # Orchestrator + CDS + integrity + tool_router
+│   │   ├── aegis-ebpf/               # Fase 0 stub — ver Roadmap
+│   │   └── deny.toml                 # cargo-deny: licencias, bans, advisories
+│   ├── sentinel_engine/              # dev harness Python (NO enforcement)
+│   ├── siem/                         # forwarder ELK mTLS
+│   ├── compliance/                   # scanners NIST / ICD / STIG
+│   ├── active-defense/               # honeypots y deception (declarativo)
+│   ├── cds/                          # Cross-Domain Solution
+│   ├── anti-tamper/                  # self-destruct conservador
+│   └── llm/                          # datasets de fine-tuning
 ├── os_base/
-│   ├── sys_services/                # systemd services (FIXED: B2) ✅
-│   ├── apparmor/                    # Perfiles AppArmor ✅
-│   ├── pam/                         # Configuración MFA (FIXED: B1) ✅
-│   └── selinux/                     # Configuración MLS ✅
-├── ui/
-│   └── aegis-desktop/              # Tauri + React UI (FIXED: B13-B15) ✅
-│       └── src-tauri/               # Backend Rust nativo ✅
-├── installer/                        # Scripts de instalación (FIXED: B3) ✅
-├── build_iso.sh                     # ISO estándar (FIXED: B0, B11) ✅
-└── build_iso_edge.sh                # ISO Edge táctico (FIXED: B11) ✅
+│   ├── sys_services/                 # units systemd endurecidas
+│   ├── apparmor/                     # perfiles AppArmor
+│   ├── pam/                          # PIV/CAC + FIDO2
+│   ├── selinux/                      # módulo MLS PoC (ver README adyacente)
+│   ├── audit/                        # reglas inmutables + fs-verity
+│   └── sysctl/                       # hardening de kernel via sysctl
+├── ui/aegis-desktop/                 # Tauri + React (UI clasificada)
+├── installer/                        # scripts de instalación
+└── .github/workflows/                # gates de CI (clippy, audit, deny, test)
 ```
 
 ---
 
-## 🔒 Controles de Seguridad Militar
+## Controles de Seguridad — qué está realmente activo
 
-| Control | Implementación | Estándar | Estado |
-|---------|-----------------|-----------|--------|
-| Secure Boot | Firmado con claves estatales (FIXED: B0) | ICD 503 | ✅ |
-| TPM 2.0 + LUKS | Sellado de claves, cifrado FIPS | NIST 800-53 SC-12 | ✅ |
-| MFA | PAM U2F/PKCS11 (FIXED: B1) | NIST 800-53 IA-2(1) | ✅ |
-| MLS | Bell-La Padula en SELinux | ICD 503, Common Criteria | ✅ |
-| Audit | Inmutable, reenvío a SIEM | NIST 800-53 AU-9 | ✅ |
-| Anti-Tamper | Firmado PGP, integridad (FIXED: B4-B5) | Militar | ✅ |
-| SBOM | Generado con syft (FIXED: L2) | Supply Chain | ✅ |
-
----
-
-## 🚔️ Capacidades Ofensivas (Uso Autorizado)
-
-> **ADVERTENCIA**: Todas las herramientas ofensivas requieren:
-> 1. Autenticación MFA (hardware token)
-> 2. Aprobación humana (Policy Engine)
-> 3. Registro inmutable en auditoría
-> 4. Para herramientas restringidas: Doble aprobación de operadores
-
-### Herramientas Disponibles (FIXED: D1 - Real exec)
-- **Escaneo**: `nmap`, `masscan`, `nuclei`, `OpenVAS` (Command::new)
-- **Auditoría**: `john`, `hashcat` (real execution)
-- **Web**: `OWASP ZAP`, `sqlmap` (real execution)
-- **Red Team** (Restringido): `metasploit` (requires dual MFA)
-- **Active Defense**: Honeypots, engaño, atribución, cyber wargames
+| Control | Implementación | Estándar |
+|---|---|---|
+| MFA hardware | PAM `pam_u2f` + `pam_pkcs11` (FIDO2 + PIV/CAC) | NIST 800-53 IA-2(1) |
+| Audit inmutable | `auditd -e 2` + reglas append-only | NIST 800-53 AU-9 |
+| MAC layer | AppArmor en producción + SELinux MLS opcional | DISA STIG |
+| Service hardening | systemd: `ProtectSystem=strict`, `CapabilityBoundingSet=`, `SystemCallFilter` | CIS Linux |
+| LLM auth | `--api-key` obligatorio, bind 127.0.0.1, token en `LoadCredential` | CWE-942 / CWE-306 |
+| Tool gating | Allowlist estricta + dual-MFA en restringidas | doctrina propia |
+| Anti-tamper | 4 sensores attestables, dry-run por defecto | doctrina propia |
 
 ---
 
-## 📊 Compliance Estatal
+## Capacidades Ofensivas (uso autorizado)
+
+> 🚧 **Estado: Roadmap parcial** — los binarios se invocan vía `Command::new` con
+> validación, pero la **sandboxing real (MicroVM)** está en Fase 2. Hoy la
+> contención se apoya únicamente en AppArmor + seccomp + UID dedicado.
+
+Toda invocación requiere:
+
+1. Autenticación MFA hardware-backed.
+2. Aprobación humana (Policy Engine).
+3. Registro inmutable.
+4. Para herramientas restringidas: doble aprobación de operadores con separación temporal (CDS).
+
+Herramientas integradas:
+- **Escaneo:** `nmap`, `masscan`, `nuclei`, OpenVAS.
+- **Auditoría:** `john`, `hashcat`.
+- **Web:** OWASP ZAP, sqlmap.
+- **Restringido:** `metasploit`, honeypot/deception, atribución, cyber wargames (dual-MFA).
+
+---
+
+## Compliance
+
+> 🚧 **Estado: Roadmap Fase 2** — los scanners son scripts declarativos que
+> producen evidencia parcial. NO son una certificación.
 
 ```bash
-# Ejecutar escáner de cumplimiento
 bash /opt/hispanshield/core/compliance/scan_compliance.sh
-
-# Resultados en: /var/log/hispanshield/compliance/
-# - nist_800_53.json
-# - icd_503.json
-# - stig.json
-# - common_criteria_eal4+.md
+# Resultados en /var/log/hispanshield/compliance/
 ```
 
 ---
 
-## 🔐 Soberanía y Cadena de Suministro (FIXED: L1-L3)
+## Soberanía y Cadena de Suministro
 
 ```bash
-# Generar SBOM (Software Bill of Materials)
-bash /opt/hispanshield/core/compliance/generate_sbom.sh
-
-# Configurar forks auditados (no external refs)
-bash /opt/hispanshield/core/compliance/sovereign_forks.sh
+bash /opt/hispanshield/core/compliance/generate_sbom.sh   # SBOM con syft
+bash /opt/hispanshield/core/compliance/sovereign_forks.sh # mirror auditado
 ```
 
-**OPSEC FIX**: Sin references a `github.com`, `huggingface.co`, `fonts.googleapis.com`, `alienvault.com`, `mitre.org`.
+---
+
+## CI / Security gates
+
+`.github/workflows/security.yml` ejecuta en cada push y PR a `main`:
+
+- `cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo test --workspace --release`
+- `cargo audit` (RustSec advisory database)
+- `cargo deny check` (licencias permisivas, bans, advisories — config en `core/rust/deny.toml`)
 
 ---
 
-## 📝 Licencia y Uso
+## Licencia y Uso
 
-**CLASIFICACIÓN ACTUAL**: CONFIDENCIAL (PoC/Research)  
-**ESTADO**: Requiere auditoría completa antes de promover a SECRETO  
-**FIRMA**: Estado Soberano (PGP Key ID: 0x12345678)  
-
-> **NOTA LEGAL**: Este software está en fase de desarrollo. No cumple  
-> con Ley de Secretos Oficiales para clasificación SECRETO.  
-> Una vez auditado y desplegado en entorno estatal, se reclasificará.
+Este código es PoC/Research. No cumple aún con Ley de Secretos Oficiales para
+clasificación SECRETO. Una vez auditado y desplegado, se reclasificará.
 
 ---
 
-## 🏛️ Contacto Institucional
+## Disclaimer
 
-Para autorizaciones, auditorías o despliegue a escala:
-- **Entidad**: Ministerio de Defensa / Centro de Ciberdefensa
-- **Clasificación**: CONFIDENCIAL (pendiente de auditoría)
-- **Firmado por**: Estado Soberano (PGP Key ID: 0x12345678)
+Este repositorio es una **arquitectura de referencia y PoC**. **NO debe
+desplegarse en hardware civil sin auditoría adicional**. Capacidades ofensivas
+declarativas (CNE — Computer Network Exploitation) **NO están implementadas**
+en este release y su exportación cruzando frontera podría requerir licencia
+**EAR / Wassenaar**; consulte asesoría legal antes de cualquier distribución,
+mirror público o transferencia internacional.
 
----
-
-## 🚀 Estado de Compilación (FIXED)
-
-| Componente | Estado | Notas |
-|------------|--------|-------|
-| Rust core (`cargo build --release`) | ✅ COMPILA | B6-B9 fixed |
-| ISO estándar (`build_iso.sh`) | ✅ COMPILA | B0, B11 fixed |
-| ISO Edge (`build_iso_edge.sh`) | ✅ COMPILA | B11 fixed |
-| Tauri UI (`npm run tauri build`) | ✅ COMPILA | B13-B15 fixed |
-| npm install | ✅ COMPILA | B15 fixed |
-| PDF generation | ⚠️ Pendiente | No bloqueante |
-
-**Todas las correcciones del audit (B0-B15, D1-D4, U1-U4, L1-L3) implementadas.**
+Las claves PGP referenciadas en el repositorio son de desarrollo. No se
+reclama firma de autoridad estatal hasta que el proceso de auditoría externa
+termine y la entidad responsable sustituya la confianza por su propia raíz.

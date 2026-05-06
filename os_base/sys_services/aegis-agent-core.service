@@ -5,26 +5,50 @@ Wants=aegis-llm-runtime.service
 
 [Service]
 Type=simple
-# CWE-269 FIX: Do NOT run as root - contradicts Zero-Trust
 User=aegis_admin
 Group=aegis_admin
 WorkingDirectory=/opt/hispanshield/core/rust/aegis-sentinel
+
+# Inject the bearer token used to gate /telemetry, /audit and /exec via systemd
+# credentials so it is only readable by this service.
+LoadCredential=sentinel_token:/etc/hispanshield/secrets/sentinel.token
+LoadCredential=cds_dual_key:/etc/hispanshield/secrets/cds_dual_mfa.key
+Environment=HISPANSHIELD_SENTINEL_TOKEN_PATH=%d/sentinel_token
+Environment=HISPANSHIELD_CDS_DUAL_KEY_PATH=%d/cds_dual_key
 ExecStart=/opt/hispanshield/core/rust/target/release/aegis-sentinel
-# Additional hardening
+
+# --- Hardening (Fase 2) ---
 NoNewPrivileges=true
-ProtectSystem=full
+ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
 RestrictSUIDGID=true
-ProtectSystem=full
-PrivateTmp=true
-ReadOnlyPaths=/etc
-ReadWritePaths=/var/log/hispanshield /opt/hispanshield/core/data
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@mount @raw-io @debug @privileged @reboot @swap @cpu-emulation @obsolete
+CapabilityBoundingSet=
 AmbientCapabilities=
-NoNewPrivileges=true
-SystemCallFilter=~@mount @raw-io @debug @privileged
+UMask=0077
+ReadOnlyPaths=/etc /opt/hispanshield
+ReadWritePaths=/var/log/hispanshield /var/lib/hispanshield /opt/hispanshield/core/data
+
 AppArmorProfile=/opt.hispanshield.core.rust.aegis-sentinel
 AuditMode=yes
+IPAddressAllow=127.0.0.1
+IPAddressDeny=any
 
 [Install]
 WantedBy=multi-user.target

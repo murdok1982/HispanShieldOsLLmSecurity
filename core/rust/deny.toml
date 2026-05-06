@@ -1,0 +1,71 @@
+# cargo-deny configuration for the HispanShield Rust workspace.
+# Run locally with:  cargo deny --manifest-path core/rust/Cargo.toml check
+# Schema reference:  https://embarkstudios.github.io/cargo-deny/checks/cfg.html
+
+[graph]
+all-features = false
+no-default-features = false
+
+[output]
+feature-depth = 1
+
+# ----------------------------------------------------------------------------
+#  Advisories — RustSec database
+# ----------------------------------------------------------------------------
+[advisories]
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/RustSec/advisory-db"]
+yanked = "deny"
+ignore = []
+
+# ----------------------------------------------------------------------------
+#  Licences — only permissive / weak-copyleft strains for a defence project
+# ----------------------------------------------------------------------------
+[licenses]
+confidence-threshold = 0.92
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+    "Unicode-3.0",
+    "MPL-2.0",
+    "Zlib",
+    "CC0-1.0",
+]
+exceptions = []
+
+# ----------------------------------------------------------------------------
+#  Bans — duplicate crates, unmaintained patterns, source pinning
+# ----------------------------------------------------------------------------
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+allow = []
+deny = [
+    # OpenSSL: prefer rustls; pulling openssl-sys widens our C attack surface.
+    { name = "openssl" },
+    { name = "openssl-sys" },
+]
+skip = []
+skip-tree = []
+
+# ----------------------------------------------------------------------------
+#  Sources — only crates.io and the official git mirrors
+# ----------------------------------------------------------------------------
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[sources.allow-org]
+github = []
+gitlab = []
+bitbucket = []

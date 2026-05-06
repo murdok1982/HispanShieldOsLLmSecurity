@@ -5,7 +5,6 @@ use std::path::Path;
 use std::time::{SystemTime, Duration};
 use hex;
 use sha2::{Sha256, Digest};
-use sha2::Digest;
 
 pub struct IntegrityChecker {
     check_interval: Duration,

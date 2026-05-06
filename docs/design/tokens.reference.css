@@ -1,0 +1,184 @@
+/* =============================================================================
+ * HispanShield OS LLmSecurity — Design Tokens (REFERENCE / SOURCE OF TRUTH)
+ * -----------------------------------------------------------------------------
+ * Ubicación canónica de tokens. El frontend mantiene un mirror en
+ *   ui/aegis-desktop/src/styles/tokens.css
+ * cuyos valores DEBEN coincidir 1:1. Cualquier divergencia es bug bloqueante.
+ *
+ * No editar sin actualizar:
+ *   - docs/design/doctrina-ux.md
+ *   - docs/design/contrast-matrix.csv
+ *   - ui/aegis-desktop/src/styles/tokens.css
+ * ============================================================================= */
+
+:root {
+  /* ---------------------------------------------------------------------------
+   * 1. CLASSIFICATION PALETTE  (US ISOO-style banners)
+   * ------------------------------------------------------------------------- */
+  --cls-ts-bg:        #E50000;   /* TOP SECRET             */
+  --cls-ts-fg:        #FFFFFF;
+  --cls-s-bg:         #FF6600;   /* SECRET                 */
+  --cls-s-fg:         #000000;
+  --cls-c-bg:         #1976D2;   /* CONFIDENTIAL           */
+  --cls-c-fg:         #FFFFFF;
+  --cls-ufouo-bg:     #1E7E34;   /* UNCLASSIFIED // FOUO   */
+  --cls-ufouo-fg:     #FFFFFF;
+  --cls-u-bg:         #1E7E34;   /* UNCLASSIFIED           */
+  --cls-u-fg:         #FFFFFF;
+  --cls-poc-bg:       #7B7B7B;   /* PoC / RESEARCH (actual) */
+  --cls-poc-fg:       #FFFFFF;
+
+  --cls-banner-height:        24px;
+  --cls-banner-font-size:     12px;
+  --cls-banner-letter-spacing: 0.15em;
+  --cls-banner-z:             9999;
+
+  /* ---------------------------------------------------------------------------
+   * 2. FUNCTIONAL TACTICAL PALETTE
+   * ------------------------------------------------------------------------- */
+  --color-phosphor-green: #7BFF8A;
+  --color-amber-alert:    #FFB300;
+  --color-critical-red:   #FF3B30;
+  --color-info-blue:      #0095FF;
+
+  /* Variantes claras para body text (cumplen AAA sobre paneles oscuros) */
+  --color-info-blue-bright:    #4DB5FF;
+  --color-critical-red-bright: #FF7A6E;
+
+  /* Surfaces */
+  --bg-base:   #0A0E12;
+  --panel-1:   #10151C;
+  --panel-2:   #161D27;
+  --panel-3:   #1E2632;   /* hover/elevated sobre panel-2 */
+
+  /* Text */
+  --text-primary:    #FFFFFF;
+  --text-secondary:  #C8D0DA;
+  --text-tertiary:   #8A93A0;
+  --text-disabled:   #5A6270;
+
+  /* Borders */
+  --border-subtle:   #232C3A;
+  --border-default:  #3A4556;
+  --border-strong:   #5A6878;
+
+  /* ---------------------------------------------------------------------------
+   * 3. TYPOGRAPHY
+   * ------------------------------------------------------------------------- */
+  --font-mono:      'JetBrains Mono', 'Fira Code', 'Cascadia Mono', ui-monospace, monospace;
+  --font-sans:      'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display:   'Inter', system-ui, sans-serif;
+
+  /* Scale (px) */
+  --fs-xs:    11px;
+  --fs-sm:    12px;
+  --fs-base:  14px;
+  --fs-md:    16px;
+  --fs-lg:    18px;
+  --fs-xl:    20px;
+  --fs-2xl:   24px;
+  --fs-3xl:   30px;
+  --fs-4xl:   36px;
+
+  /* Weights */
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
+
+  /* Line heights */
+  --lh-tight:    1.15;
+  --lh-normal:   1.4;
+  --lh-relaxed:  1.6;
+
+  /* Letter spacing */
+  --ls-tight:    -0.01em;
+  --ls-normal:   0;
+  --ls-wide:     0.05em;
+  --ls-widest:   0.15em;   /* banners, badges, tactical labels */
+
+  /* ---------------------------------------------------------------------------
+   * 4. SPACING (4px grid)
+   * ------------------------------------------------------------------------- */
+  --space-0:   0;
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   24px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+  --space-16:  64px;
+
+  /* ---------------------------------------------------------------------------
+   * 5. RADIUS
+   * ------------------------------------------------------------------------- */
+  --radius-none: 0;
+  --radius-sm:   2px;
+  --radius-md:   4px;
+  --radius-lg:   6px;
+  --radius-xl:   8px;
+  --radius-pill: 9999px;
+
+  /* ---------------------------------------------------------------------------
+   * 6. SHADOWS  (sutiles — sin glows brand pop)
+   * ------------------------------------------------------------------------- */
+  --shadow-sm:       0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-md:       0 4px 8px rgba(0, 0, 0, 0.45);
+  --shadow-lg:       0 8px 16px rgba(0, 0, 0, 0.55);
+  --shadow-panel:    0 0 0 1px var(--border-subtle), 0 2px 6px rgba(0, 0, 0, 0.50);
+  --shadow-critical: 0 0 0 1px var(--color-critical-red), 0 0 12px rgba(255, 59, 48, 0.30);
+  --shadow-focus:    0 0 0 2px var(--color-phosphor-green);
+
+  /* ---------------------------------------------------------------------------
+   * 7. Z-INDEX
+   * ------------------------------------------------------------------------- */
+  --z-base:                0;
+  --z-dock:                100;
+  --z-dropdown:            500;
+  --z-modal-backdrop:      1000;
+  --z-modal:               1001;
+  --z-toast:               2000;
+  --z-fido-prompt:         5000;
+  --z-anti-tamper-gate:    9000;
+  --z-classification-banner: 9999;
+
+  /* ---------------------------------------------------------------------------
+   * 8. BREAKPOINTS  (consumir desde JS / @custom-media)
+   * ------------------------------------------------------------------------- */
+  --bp-sm:  640px;
+  --bp-md:  768px;
+  --bp-lg:  1024px;
+  --bp-xl:  1280px;
+  --bp-2xl: 1536px;
+
+  /* ---------------------------------------------------------------------------
+   * 9. MOTION
+   * ------------------------------------------------------------------------- */
+  --motion-fast:    100ms;   /* hover, focus, tooltips                     */
+  --motion-medium:  200ms;   /* panel transitions, modal in/out            */
+  --motion-slow:    300ms;   /* live data updates (cap absoluto)           */
+  --motion-tamper:  0ms;     /* anti-tamper: instantáneo, sin transición  */
+
+  --ease-out:   cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:    cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+
+  /* ---------------------------------------------------------------------------
+   * 10. EFFECTS — limites operacionales
+   * ------------------------------------------------------------------------- */
+  --blur-max: 8px;            /* NO superar en paneles críticos */
+  --opacity-disabled: 0.4;
+  --opacity-overlay:  0.72;
+}
+
+/* Respeto explícito de prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast:   0ms;
+    --motion-medium: 0ms;
+    --motion-slow:   0ms;
+  }
+}

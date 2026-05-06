@@ -5,18 +5,61 @@ Wants=aegis-agent-core.service
 
 [Service]
 Type=simple
+# Runs as the unprivileged aegis_agent service account (created by the installer)
+# to neutralise CWE-250 (root LLM) and contain prompt-injection blast radius.
 User=aegis_agent
 Group=aegis
 WorkingDirectory=/opt/hispanshield/models
-# D4 FIX: Add API key for local authentication
-ExecStart=/opt/hispanshield/bin/llama-Server -m /opt/hispanshield/models/aegis-core-1.5b.gguf -c 4096 --host 127.0.0.1 --port 8080 --threads 4 --api-key aegis-local-secret-$(cat /etc/hispanshield/token 2>/dev/null || echo "default")
+
+# CWE-942 / CWE-306 — the upstream llama.cpp server has no auth by default; any
+# local process (or sandboxed app) could prompt-inject the LLM, exfiltrate via
+# tool calls, or DoS the model. We close that gap with three controls:
+#
+#   1. --api-key is required on every request. The token is loaded via systemd
+#      LoadCredential (tmpfs, root-only, never on argv visible to /proc) and
+#      passed through the CREDENTIALS_DIRECTORY env. Generate with:
+#          openssl rand -hex 32 > /etc/hispanshield/secrets/llm.token
+#          chown root:root /etc/hispanshield/secrets/llm.token
+#          chmod 0400      /etc/hispanshield/secrets/llm.token
+#   2. --host 127.0.0.1 binds the loopback only — never 0.0.0.0. Combined with
+#      IPAddressAllow=127.0.0.1 below, the socket is unreachable off-box even
+#      if a misconfigured firewall opens 8080.
+#   3. AppArmor + the systemd hardening block below confine filesystem and
+#      syscall surface so a compromised model server cannot escape.
+LoadCredential=llm_token:/etc/hispanshield/secrets/llm.token
+ExecStart=/bin/sh -c '/opt/hispanshield/bin/llama-server -m /opt/hispanshield/models/aegis-core-1.5b.gguf -c 4096 --host 127.0.0.1 --port 8080 --threads 4 --api-key "$(cat ${CREDENTIALS_DIRECTORY}/llm_token)"'
+
+# --- Hardening (Fase 2) ---
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+LockPersonality=true
+MemoryDenyWriteExecute=false
+# llama.cpp may JIT/AVX-execute model tensors so MDWE is left off; tighten if
+# the chosen build does not require executable mappings.
+RestrictRealtime=true
+RestrictSUIDGID=true
+RestrictNamespaces=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 NoNewPrivileges=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@mount @raw-io @debug @privileged @reboot @swap @cpu-emulation @obsolete
 CapabilityBoundingSet=
-SystemCallFilter=~@mount @raw-io @debug @privileged
-AppArmorProfile=/opt.hispanshield.bin.llama-Server
+AmbientCapabilities=
+UMask=0077
+ReadOnlyPaths=/etc /opt/hispanshield/models /opt/hispanshield/bin
+ReadWritePaths=/var/log/hispanshield
+
+AppArmorProfile=/opt.hispanshield.bin.llama-server
 AuditMode=yes
 IPAddressAllow=127.0.0.1
 IPAddressDeny=any

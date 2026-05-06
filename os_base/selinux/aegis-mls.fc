@@ -1,0 +1,13 @@
+# File contexts for the Aegis MLS module.
+# Apply with: restorecon -RFv /opt/hispanshield /var/log/hispanshield /etc/hispanshield/secrets
+
+/opt/hispanshield/core/rust/target/release/aegis-sentinel    --  gen_context(system_u:object_r:aegis_exec_t,s2)
+/opt/hispanshield/core/rust/target/release/aegis-gatekeeper  --  gen_context(system_u:object_r:aegis_exec_t,s2)
+/opt/hispanshield/bin/llama-server                           --  gen_context(system_u:object_r:aegis_exec_t,s2)
+
+/opt/hispanshield/core/data(/.*)?      gen_context(system_u:object_r:aegis_data_t,s1)
+/var/lib/hispanshield(/.*)?            gen_context(system_u:object_r:aegis_data_t,s1)
+/var/log/hispanshield(/.*)?            gen_context(system_u:object_r:aegis_log_t,s1)
+
+/etc/hispanshield/secrets(/.*)?        gen_context(system_u:object_r:aegis_secret_t,s2)
+/run/credentials/aegis-.*\.service(/.*)?  gen_context(system_u:object_r:aegis_secret_t,s2)

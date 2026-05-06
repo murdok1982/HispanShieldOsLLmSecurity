@@ -1,146 +1,228 @@
 #!/usr/bin/env bash
 # HispanShield OS - Self-Destruct Module (Military Anti-Tamper)
-# Wipes TPM keys, sensitive data, and performs thermal/magnetic wiping on tampering detection
+#
+# Wipes TPM keys, sensitive data, and LUKS headers when an authenticated tamper
+# event is detected.
+#
+# DESIGN (Fase 1 hardening):
+#   - DISABLED BY DEFAULT. Refuses to arm unless HISPANSHIELD_SELF_DESTRUCT_ARMED=1
+#     AND the on-disk arm token at /etc/hispanshield/secrets/destruct.armed exists
+#     and contains a non-empty value.
+#   - REQUIRES N>=3 INDEPENDENT, ATTESTABLE SENSORS to fire (chassis intrusion,
+#     boot-attestation drift, audit-daemon alert). Heuristics like "lsmod count"
+#     are removed because any benign desktop trips them.
+#   - DRY-RUN BY DEFAULT (HISPANSHIELD_SELF_DESTRUCT_DRYRUN=1, default 1). Sends
+#     a SOC alert via the audit channel and waits for an explicit second-stage
+#     authorization before any wipe is performed.
+#   - All decisions are HMAC-logged so the trigger is attributable post-mortem.
 
 set -euo pipefail
 
-log() { echo -e "\e[1;31m[Self-Destruct]\e[0m $1"; }
+log()  { echo -e "\e[1;31m[Self-Destruct]\e[0m $1"; }
 warn() { echo -e "\e[1;33m[WARNING]\e[0m $1"; }
-error() { echo -e "\e[1;41m[CRITICAL]\e[0m $1"; }
+err()  { echo -e "\e[1;41m[CRITICAL]\e[0m $1" >&2; }
 
-TPM_KEYS="/etc/hispanshield/tpm"
-SECURE_BOOT_KEYS="/etc/hispanshield/secureboot"
-AEGIS_DATA="/opt/hispanshield /var/log/hispanshield"
+ARMED_FLAG_PATH="${HISPANSHIELD_DESTRUCT_ARMED_PATH:-/etc/hispanshield/secrets/destruct.armed}"
+HMAC_KEY_PATH="${HISPANSHIELD_DESTRUCT_HMAC_KEY:-/etc/hispanshield/secrets/destruct_hmac.key}"
+AUDIT_LOG="${HISPANSHIELD_AUDIT_LOG:-/var/log/hispanshield/audit.log}"
+SOC_ALERT_FIFO="${HISPANSHIELD_SOC_ALERT_FIFO:-/var/run/hispanshield/soc_alert}"
+TPM_KEYS="${HISPANSHIELD_TPM_DIR:-/etc/hispanshield/tpm}"
+SECURE_BOOT_KEYS="${HISPANSHIELD_SB_DIR:-/etc/hispanshield/secureboot}"
 
-# Monitor for tampering indicators
-monitor_tampering() {
-    log "Starting anti-tamper monitoring (Phase 4: Tactical Resilience)..."
-    
-    if [ "${HISPANSHIELD_ENV:-prod}" != "prod" ]; then
-        return 0
-    fi
+DRYRUN="${HISPANSHIELD_SELF_DESTRUCT_DRYRUN:-1}"
+ARMED_ENV="${HISPANSHIELD_SELF_DESTRUCT_ARMED:-0}"
+SENSOR_THRESHOLD="${HISPANSHIELD_SENSOR_THRESHOLD:-3}"
+POLL_INTERVAL="${HISPANSHIELD_POLL_INTERVAL:-30}"
 
-    local sensors_triggered=0
-
-    # 1. Check Chassis Intrusion Switch (Hardware level)
-    if [ -f "/sys/class/gpio/gpio1/value" ]; then
-        chassis_status=$(cat /sys/class/gpio/gpio1/value)
-        if [ "$chassis_status" -eq 1 ]; then
-             sensors_triggered=$((sensors_triggered + 1))
-        fi
-    fi
-
-    # 2. Check for debugging/tracing
-    if grep -q "tracing" /proc/1/status 2>/dev/null; then
-        sensors_triggered=$((sensors_triggered + 1))
-    fi
-    
-    # 3. Check for unknown kernel modules
-    local loaded_modules=$(lsmod | wc -l)
-    if [ "$loaded_modules" -gt 150 ]; then
-        sensors_triggered=$((sensors_triggered + 1))
-    fi
-    
-    # 4. Check for unexpected network connections
-    local suspicious_ports=$(netstat -tuln | grep -E ":(4444|31337|1337)" | wc -l)
-    if [ "$suspicious_ports" -gt 0 ]; then
-        sensors_triggered=$((sensors_triggered + 1))
-    fi
-
-    if [ "$sensors_triggered" -ge 2 ]; then
-        trigger_self_destruct "MULTI_SENSOR_TAMPERING_DETECTED ($sensors_triggered sensors)"
+audit_log() {
+    local event="$1"
+    local ts
+    ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    if [ -r "$HMAC_KEY_PATH" ]; then
+        local mac
+        mac=$(printf '%s|%s' "$ts" "$event" \
+              | openssl dgst -sha256 -hmac "$(cat "$HMAC_KEY_PATH")" \
+              | awk '{print $2}')
+        printf '%s SELF_DESTRUCT %s mac=%s\n' "$ts" "$event" "$mac" \
+            >> "$AUDIT_LOG" 2>/dev/null || true
+    else
+        printf '%s SELF_DESTRUCT %s mac=NONE\n' "$ts" "$event" \
+            >> "$AUDIT_LOG" 2>/dev/null || true
     fi
 }
 
-# Wipe TPM keys (irreversible without backup)
+soc_alert() {
+    local msg="$1"
+    if [ -p "$SOC_ALERT_FIFO" ]; then
+        printf '%s\n' "$msg" > "$SOC_ALERT_FIFO" 2>/dev/null || true
+    fi
+    audit_log "SOC_ALERT $msg"
+}
+
+is_armed() {
+    if [ "$ARMED_ENV" != "1" ]; then
+        return 1
+    fi
+    if [ ! -s "$ARMED_FLAG_PATH" ]; then
+        return 1
+    fi
+    return 0
+}
+
+# === Sensors (each must be independently attestable) ===
+
+# 1. Chassis intrusion via GPIO (set by hardware switch).
+sensor_chassis() {
+    [ -r "/sys/class/gpio/gpio1/value" ] && [ "$(cat /sys/class/gpio/gpio1/value 2>/dev/null)" = "1" ]
+}
+
+# 2. Secure-Boot / TPM PCR drift recorded by the boot attester.
+sensor_attestation_drift() {
+    [ -r "/var/run/hispanshield/attestation.failed" ]
+}
+
+# 3. Audit daemon raised a tamper alert (signed by sentinel).
+sensor_audit_tamper_flag() {
+    [ -r "/var/run/hispanshield/tamper.flag" ]
+}
+
+# 4. Hardware kill-switch (physically wired ground-tap) — for tactical units only.
+sensor_killswitch() {
+    [ -r "/sys/class/gpio/gpio23/value" ] && [ "$(cat /sys/class/gpio/gpio23/value 2>/dev/null)" = "1" ]
+}
+
+count_triggered_sensors() {
+    local triggered=0
+    sensor_chassis              && triggered=$((triggered + 1))
+    sensor_attestation_drift    && triggered=$((triggered + 1))
+    sensor_audit_tamper_flag    && triggered=$((triggered + 1))
+    sensor_killswitch           && triggered=$((triggered + 1))
+    echo "$triggered"
+}
+
+# === Wipe primitives — only invoked after dry-run + second-stage authorization ===
+
 wipe_tpm_keys() {
-    log "WIPING TPM KEYS - Anti-Tamper activated"
-    
-    # Clear TPM NV indices (if accessible)
+    log "WIPING TPM KEYS"
     if command -v tpm2_nvundefine &> /dev/null; then
         tpm2_nvundefine -x 0x1500000 2>/dev/null || true
         tpm2_nvundefine -x 0x1500001 2>/dev/null || true
     fi
-    
-    # Wipe key files
-    shred -vfz -n 7 "$TPM_KEYS"/* 2>/dev/null || true
-    rm -rf "$TPM_KEYS"/*
-    
-    log "TPM keys WIPED"
+    [ -d "$TPM_KEYS" ] && shred -vfz -n 7 "$TPM_KEYS"/* 2>/dev/null || true
+    [ -d "$TPM_KEYS" ] && rm -rf "${TPM_KEYS:?}"/* 2>/dev/null || true
+    audit_log "WIPE_TPM_DONE"
 }
 
-# Wipe sensitive data
 wipe_sensitive_data() {
     log "Wiping sensitive data..."
-    
-    # Wipe Aegis data (7 passes, DoD 5220.22-M standard)
-    find /opt/hispanshield -type f -exec shred -vfz -n 7 {} \; 2>/dev/null || true
+    find /opt/hispanshield -type f -print0 2>/dev/null \
+        | xargs -0 -r shred -vfz -n 7 2>/dev/null || true
     rm -rf /opt/hispanshield/models/* 2>/dev/null || true
     rm -rf /var/log/hispanshield/* 2>/dev/null || true
-    
-    # Wipe Secure Boot keys
-    find /etc/hispanshield/secureboot -type f -exec shred -vfz -n 7 {} \; 2>/dev/null || true
-    
-    log "Sensitive data WIPED"
+    [ -d "$SECURE_BOOT_KEYS" ] && find "$SECURE_BOOT_KEYS" -type f -print0 \
+        | xargs -0 -r shred -vfz -n 7 2>/dev/null || true
+    audit_log "WIPE_DATA_DONE"
 }
 
-# Overwrite LUKS header (make disk unreadable)
 wipe_disk_encryption() {
-    log "Overwriting LUKS header (disk will be unrecoverable)..."
-    
-    # Find LUKS-encrypted partitions
-    local luks_parts=$(blkid | grep "TYPE=\"crypto_LUKS\"" | cut -d: -f1)
-    
+    log "Overwriting LUKS headers..."
+    local luks_parts
+    luks_parts=$(blkid 2>/dev/null | awk -F: '/TYPE="crypto_LUKS"/{print $1}')
     for part in $luks_parts; do
-        warn "Wiping LUKS header on $part (Magnetic Override)"
-        # Magnetic/Thermal wipe simulation: multiple random passes over header
-        dd if=/dev/urandom of=$part bs=1M count=10 2>/dev/null || true
-        dd if=/dev/zero of=$part bs=1M count=10 2>/dev/null || true
-        dd if=/dev/urandom of=$part bs=1M count=10 2>/dev/null || true
+        warn "Wiping LUKS header on $part"
+        dd if=/dev/urandom of="$part" bs=1M count=10 conv=fsync 2>/dev/null || true
+        dd if=/dev/zero    of="$part" bs=1M count=10 conv=fsync 2>/dev/null || true
+        dd if=/dev/urandom of="$part" bs=1M count=10 conv=fsync 2>/dev/null || true
     done
-    
-    log "LUKS headers WIPED - disk now unrecoverable"
+    audit_log "WIPE_LUKS_DONE"
 }
 
-# RAM Thermal Wipe (DDR Memory scrambling)
-wipe_ram() {
-    log "Initiating RAM thermal wipe..."
-    # Allocate and fill all available memory with random data to flush cold-boot attack vectors
-    # This will likely OOM kill the script, but we are self-destructing anyway.
-    nohup bash -c 'cat /dev/urandom | head -c $(grep MemFree /proc/meminfo | awk "{print \$2}")K > /dev/null' &>/dev/null &
+wipe_ram_pressure() {
+    log "Allocating memory pressure to flush cold-boot residue..."
+    # Detached subshell; OS may OOM-kill it, which is intended.
+    nohup bash -c '
+        free_kb=$(awk "/MemFree/{print \$2}" /proc/meminfo)
+        head -c "${free_kb}K" /dev/urandom > /dev/null
+    ' &>/dev/null &
 }
 
-# Main self-destruct trigger
+wait_for_second_stage_authorization() {
+    # In production this blocks until either:
+    #   - SOC operator writes "AUTHORIZE" to /var/run/hispanshield/destruct.gate, or
+    #   - the configured grace window expires and policy says "auto-confirm".
+    # Default behaviour: auto-confirm OFF; require explicit operator authorization.
+    local gate="${HISPANSHIELD_DESTRUCT_GATE:-/var/run/hispanshield/destruct.gate}"
+    local timeout="${HISPANSHIELD_DESTRUCT_TIMEOUT:-300}"
+    local waited=0
+    while [ "$waited" -lt "$timeout" ]; do
+        if [ -r "$gate" ] && grep -q '^AUTHORIZE$' "$gate" 2>/dev/null; then
+            audit_log "SECOND_STAGE_AUTHORIZED"
+            return 0
+        fi
+        sleep 5
+        waited=$((waited + 5))
+    done
+    audit_log "SECOND_STAGE_TIMEOUT waited=${waited}s"
+    return 1
+}
+
 trigger_self_destruct() {
     local reason="$1"
-    error "SELF-DESTRUCT TRIGGERED: $reason"
-    
-    # Log to immutable audit (if still possible)
-    echo "$(date -Iseconds) SELF_DESTRUCT: $reason" >> /var/log/hispanshield/audit.log 2>/dev/null || true
-    
-    # Kill all Aegis processes
+    err "SELF-DESTRUCT TRIGGER: $reason"
+    audit_log "TRIGGER reason=\"$reason\""
+    soc_alert "TAMPER trigger=\"$reason\" stage=dryrun"
+
+    if [ "$DRYRUN" = "1" ]; then
+        warn "DRY-RUN active — no destructive action will run. Set HISPANSHIELD_SELF_DESTRUCT_DRYRUN=0 to enable."
+        return 0
+    fi
+
+    if ! wait_for_second_stage_authorization; then
+        warn "Second-stage authorization not received; aborting destruct sequence."
+        soc_alert "TAMPER trigger=\"$reason\" stage=aborted"
+        return 0
+    fi
+
+    # Best-effort: kill aegis processes before wiping the data they depend on.
     pkill -9 -f aegis 2>/dev/null || true
-    
-    # 1. Wipe keys and data
+
     wipe_tpm_keys
     wipe_sensitive_data
-    
-    # 2. Wipe disk encryption (makes system unrecoverable)
     wipe_disk_encryption
-    
-    # 3. Wipe RAM
-    wipe_ram
-    
-    # Final log
-    log "SELF-DESTRUCT COMPLETE - System is now unrecoverable"
-    
-    # Halt system immediately (magic SysRq)
-    echo b > /proc/sysrq-trigger 2>/dev/null || halt -f 2>/dev/null || poweroff -f 2>/dev/null || true
+    wipe_ram_pressure
+
+    audit_log "DESTRUCT_COMPLETE"
+    log "SELF-DESTRUCT COMPLETE"
+
+    # Hard reset; SysRq must be enabled by /etc/sysctl.d/ for this to work.
+    echo b > /proc/sysrq-trigger 2>/dev/null \
+        || halt -f 2>/dev/null \
+        || poweroff -f 2>/dev/null \
+        || true
 }
 
-# Main monitoring loop
-log "Self-Destruct module active (Military Anti-Tamper - DoD Compliant)"
-while true; do
-    monitor_tampering
-    sleep 30 # Reduced interval for tactical scenarios
-done
+monitor_loop() {
+    log "Anti-tamper monitor active (sensor_threshold=$SENSOR_THRESHOLD dryrun=$DRYRUN)"
+    if ! is_armed; then
+        warn "Module is NOT ARMED (HISPANSHIELD_SELF_DESTRUCT_ARMED!=1 or arm token missing). Idle-monitoring only."
+    fi
+    while true; do
+        local triggered
+        triggered=$(count_triggered_sensors)
+        if [ "$triggered" -ge "$SENSOR_THRESHOLD" ]; then
+            audit_log "SENSORS_TRIPPED count=$triggered threshold=$SENSOR_THRESHOLD"
+            if is_armed; then
+                trigger_self_destruct "MULTI_SENSOR ${triggered}/${SENSOR_THRESHOLD}"
+                # After a successful (or aborted) trigger, exit the loop;
+                # systemd will decide whether to restart the unit.
+                return 0
+            else
+                warn "Sensors tripped ($triggered) but module not armed; SOC alert only."
+                soc_alert "TAMPER_UNARMED sensors=$triggered"
+            fi
+        fi
+        sleep "$POLL_INTERVAL"
+    done
+}
+
+monitor_loop

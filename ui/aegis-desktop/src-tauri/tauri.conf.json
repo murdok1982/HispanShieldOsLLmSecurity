@@ -15,12 +15,6 @@
       "all": false,
       "shell": {
         "open": false
-      },
-      "fs": {
-        "all": false,
-        "readFile": true,
-        "writeFile": true,
-        "scope": ["$APPDATA/**", "$APPCONFIG/**"]
       }
     },
     "bundle": {

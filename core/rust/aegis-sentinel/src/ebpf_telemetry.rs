@@ -75,7 +75,7 @@ async fn read_cpu_usage() -> f64 {
                 if parts.len() >= 5 {
                     let user = parts[1].parse::<u64>().unwrap_or(0);
                     let nice = parts[2].parse::<u64>().unwrap_or(0);
-                    let system = parts[3].parse::<u64>().unwrapor(0);
+                    let system = parts[3].parse::<u64>().unwrap_or(0);
                     let idle = parts[4].parse::<u64>().unwrap_or(0);
                     let total = user + nice + system + idle;
                     if total > 0 {

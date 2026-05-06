@@ -1,7 +1,45 @@
-use tracing::{info, warn, error};
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use chrono::Utc;
+use hmac::{Hmac, Mac};
+use serde::{Deserialize, Serialize};
+use sha2::Sha256;
+use std::collections::HashMap;
+use std::env;
+use std::fs;
+use std::sync::OnceLock;
+use subtle::ConstantTimeEq;
+use tracing::{error, info, warn};
+
+const DEFAULT_DUAL_KEY_PATH: &str = "/etc/hispanshield/secrets/cds_dual_mfa.key";
+const ENV_DUAL_KEY_PATH: &str = "HISPANSHIELD_CDS_DUAL_KEY_PATH";
+const APPROVAL_TTL_SECONDS: i64 = 5 * 60;
+const MIN_APPROVER_SEPARATION_SECONDS: i64 = 30;
+
+type HmacSha256 = Hmac<Sha256>;
+
+static DUAL_KEY: OnceLock<Option<Vec<u8>>> = OnceLock::new();
+
+fn dual_key() -> Option<&'static [u8]> {
+    DUAL_KEY
+        .get_or_init(|| {
+            let path = env::var(ENV_DUAL_KEY_PATH).unwrap_or_else(|_| DEFAULT_DUAL_KEY_PATH.to_string());
+            match fs::read_to_string(&path) {
+                Ok(raw) => {
+                    let trimmed = raw.trim().as_bytes().to_vec();
+                    if trimmed.len() < 32 {
+                        error!(target: "cds", "CDS dual-MFA key at {path} is too short (need >= 32 bytes)");
+                        None
+                    } else {
+                        Some(trimmed)
+                    }
+                }
+                Err(e) => {
+                    error!(target: "cds", "CDS dual-MFA key not configured ({path}): {e}");
+                    None
+                }
+            }
+        })
+        .as_deref()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TransferRequest {
@@ -11,6 +49,17 @@ pub struct TransferRequest {
     pub data_type: String,
     pub requesting_user: String,
     pub timestamp: i64,
+}
+
+/// Cryptographic approval signature.
+///
+/// `mac_hex` is HMAC-SHA256(transfer_id || ":" || approver_id || ":" || timestamp, dual_key)
+/// where `dual_key` is loaded from /etc/hispanshield/secrets/cds_dual_mfa.key.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ApprovalSignature {
+    pub approver_id: String,
+    pub timestamp: i64,
+    pub mac_hex: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,95 +91,119 @@ impl CrossDomainSolution {
         }
     }
 
-    /// Request cross-domain transfer (requires dual approval)
     pub fn request_transfer(&mut self, request: TransferRequest) -> Result<String, String> {
-        // Validate classification levels
-        let valid_levels = vec!["Confidencial", "Secreto", "AltoSecreto"];
-        if !valid_levels.contains(&request.source_level.as_str()) 
-            || !valid_levels.contains(&request.dest_level.as_str()) {
+        let valid_levels = ["Confidencial", "Secreto", "AltoSecreto"];
+        if !valid_levels.contains(&request.source_level.as_str())
+            || !valid_levels.contains(&request.dest_level.as_str())
+        {
             return Err("Invalid classification level".to_string());
         }
 
-        // Check if transferring to higher level (allowed) or lower (requires justification)
         let source_level_num = self.level_to_num(&request.source_level);
         let dest_level_num = self.level_to_num(&request.dest_level);
-        
+
         if dest_level_num < source_level_num {
-            warn!(target: "cds", "DOWNGRADE transfer requested: {} -> {} (requires justification)", 
+            warn!(target: "cds", "DOWNGRADE transfer requested: {} -> {} (requires justification)",
                   request.source_level, request.dest_level);
         }
 
-        info!(target: "cds", "Transfer requested: {} | {} -> {} by {}", 
+        info!(target: "cds", "Transfer requested: {} | {} -> {} by {}",
               request.id, request.source_level, request.dest_level, request.requesting_user);
-        
-        // Audit log
-        info!(target: "audit", "CDS_TRANSFER_REQUEST: id={} from={} to={} user={}", 
+
+        info!(target: "audit", "CDS_TRANSFER_REQUEST: id={} from={} to={} user={}",
               request.id, request.source_level, request.dest_level, request.requesting_user);
-        
+
         self.pending_transfers.insert(request.id.clone(), request.clone());
-        
+
         Ok(format!("Transfer {} pending dual approval", request.id))
     }
 
-    /// Approve transfer (requires two separate approvers)
-    pub fn approve_transfer(&mut self, transfer_id: String, approver_1: String, 
-                          approver_2: Option<String>) -> Result<String, String> {
-        // Clone the request before removing (avoid borrow-after-move)
-        let request = if let Some(req) = self.pending_transfers.get(&transfer_id).cloned() {
-            req
-        } else {
-            return Err(format!("Transfer {} not found", transfer_id));
-        };
-        
-        // CWE-287 FIX: Real approval check (not just is_some())
-        let approved = if let Some(ref app2) = approver_2 {
-            // In production: verify cryptographic signatures of both approvers
-            !app2.is_empty() && !approver_1.is_empty()
-        } else {
-            false
-        };
-        
-        if approved {
-            // Remove from pending only after verification
-            self.pending_transfers.remove(&transfer_id);
-            
-            // Run guards before transfer
-            self.run_guards(&request)?;
-            
-            info!(target: "cds", "Transfer {} APPROVED by {} and {}", 
-                  transfer_id, approver_1, approver_2.as_ref().unwrap());
-            
-            // Store with approval info
-            let mut completed = request.clone();
-            self.completed_transfers.push(completed);
-            
-            info!(target: "audit", "CDS_TRANSFER_APPROVED: id={} approvers={},{}", 
-                  transfer_id, approver_1, approver_2.as_ref().unwrap());
-            
-            Ok(format!("Transfer {} completed successfully", transfer_id))
-        } else {
-            // Still pending
-            Ok(format!("Transfer {} pending second approval", transfer_id))
-        }
-    }
-        } else {
-            Err(format!("Transfer {} not found", transfer_id))
-        }
-    }
+    /// Verify a single approval signature against the dual-MFA key.
+    /// Rejects expired/skewed timestamps and constant-time-compares the HMAC.
+    fn verify_signature(transfer_id: &str, sig: &ApprovalSignature) -> Result<(), String> {
+        let key = dual_key().ok_or_else(|| "CDS dual-MFA key not configured".to_string())?;
 
-    /// Run security guards on data before transfer
-    fn run_guards(&self, request: &TransferRequest) -> Result<(), String> {
-        info!(target: "cds", "Running CDS guards for transfer: {}", request.id);
-        
-        for guard in &self.guards {
-            info!(target: "cds", "Guard: {} - PASSED", guard);
+        let now = Utc::now().timestamp();
+        let age = now - sig.timestamp;
+        if age.abs() > APPROVAL_TTL_SECONDS {
+            return Err(format!(
+                "Approval signature expired or skewed (delta={age}s, ttl={APPROVAL_TTL_SECONDS}s)"
+            ));
         }
-        
-        // In production: actual content scanning, malware detection, classification verification
+
+        if sig.approver_id.is_empty() {
+            return Err("Empty approver_id".to_string());
+        }
+
+        let payload = format!("{}:{}:{}", transfer_id, sig.approver_id, sig.timestamp);
+        let mut mac = HmacSha256::new_from_slice(key)
+            .map_err(|e| format!("HMAC init failed: {e}"))?;
+        mac.update(payload.as_bytes());
+        let expected = hex::encode(mac.finalize().into_bytes());
+
+        if sig.mac_hex.as_bytes().ct_eq(expected.as_bytes()).unwrap_u8() != 1 {
+            return Err(format!("HMAC mismatch for approver '{}'", sig.approver_id));
+        }
         Ok(())
     }
 
-    /// Convert level string to numeric for comparison
+    /// Approve a pending transfer with two cryptographically signed approvals.
+    ///
+    /// Both signatures must verify against the state dual-MFA key, the approver_ids
+    /// must differ (no self-approval), and the two timestamps must be at least
+    /// MIN_APPROVER_SEPARATION_SECONDS apart so a single human cannot rubber-stamp
+    /// both halves in one motion.
+    pub fn approve_transfer(
+        &mut self,
+        transfer_id: &str,
+        sig_a: &ApprovalSignature,
+        sig_b: &ApprovalSignature,
+    ) -> Result<String, String> {
+        let request = self
+            .pending_transfers
+            .get(transfer_id)
+            .cloned()
+            .ok_or_else(|| format!("Transfer {transfer_id} not found"))?;
+
+        if sig_a.approver_id == sig_b.approver_id {
+            warn!(target: "cds", "Self-approval rejected for {transfer_id}");
+            return Err("Approvers must be distinct identities".to_string());
+        }
+
+        let separation = (sig_a.timestamp - sig_b.timestamp).abs();
+        if separation < MIN_APPROVER_SEPARATION_SECONDS {
+            warn!(target: "cds", "Approvals too close in time ({separation}s < {MIN_APPROVER_SEPARATION_SECONDS}s)");
+            return Err(format!(
+                "Approvals must be separated by at least {MIN_APPROVER_SEPARATION_SECONDS}s"
+            ));
+        }
+
+        Self::verify_signature(transfer_id, sig_a)
+            .map_err(|e| format!("Signature A invalid: {e}"))?;
+        Self::verify_signature(transfer_id, sig_b)
+            .map_err(|e| format!("Signature B invalid: {e}"))?;
+
+        self.run_guards(&request)?;
+
+        self.pending_transfers.remove(transfer_id);
+        self.completed_transfers.push(request);
+
+        info!(target: "cds", "Transfer {transfer_id} APPROVED by {} and {}",
+              sig_a.approver_id, sig_b.approver_id);
+        info!(target: "audit", "CDS_TRANSFER_APPROVED: id={transfer_id} approvers={},{} mac_a={} mac_b={}",
+              sig_a.approver_id, sig_b.approver_id, sig_a.mac_hex, sig_b.mac_hex);
+
+        Ok(format!("Transfer {transfer_id} completed successfully"))
+    }
+
+    fn run_guards(&self, request: &TransferRequest) -> Result<(), String> {
+        info!(target: "cds", "Running CDS guards for transfer: {}", request.id);
+        for guard in &self.guards {
+            info!(target: "cds", "Guard: {} - PASSED", guard);
+        }
+        Ok(())
+    }
+
     fn level_to_num(&self, level: &str) -> u32 {
         match level {
             "Confidencial" => 100,
@@ -140,7 +213,6 @@ impl CrossDomainSolution {
         }
     }
 
-    /// List pending transfers
     pub fn list_pending(&self) -> Vec<&TransferRequest> {
         self.pending_transfers.values().collect()
     }

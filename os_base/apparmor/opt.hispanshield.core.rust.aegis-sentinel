@@ -3,39 +3,48 @@
 #include <abstractions/nameservice>
 #include <abstractions/openssl>
 
+# AppArmor profile for the Aegis Sentinel orchestrator.
+# Hardened in Fase 2: removed sys_ptrace and sys_admin (privilege escalation
+# vectors that contradicted Zero-Trust). Sentinel does NOT need them.
 /opt/hispanshield/core/rust/target/release/aegis-sentinel {
     capability net_bind_service,
-    capability sys_ptrace,
-    capability sys_admin,
-    
-    network inet stream,
+
+    network inet  stream,
     network inet6 stream,
-    network unix stream,
-    
-    # Read-only access to system configs
+    network unix  stream,
+
+    # Read-only access to system configs (no writes).
     /etc/hispanshield/** r,
-    /etc/secureboot/** r,
-    /etc/tpm/** r,
-    
-    # Read access to Rust core
+    /etc/secureboot/**   r,
+    /etc/tpm/**          r,
+
+    # The credentials directory injected by systemd LoadCredential lives under
+    # /run/credentials/<unit>/<name>; allow read-only.
+    /run/credentials/aegis-agent-core.service/** r,
+
+    # Read access to Rust core binaries; no write to itself.
     /opt/hispanshield/core/rust/** r,
-    
-    # Write access only to specific log/data directories
-    /var/log/hispanshield/** rw,
-    /opt/hispanshield/core/data/** rw,
-    
-    # Unix socket for IPC
+    /opt/hispanshield/core/rust/target/release/aegis-sentinel mr,
+
+    # Write access only to the explicit log/data directories.
+    /var/log/hispanshield/**          rw,
+    /var/lib/hispanshield/**          rw,
+    /opt/hispanshield/core/data/**    rw,
+
+    # IPC sockets.
     /run/aegis-sentinel.sock rw,
-    /run/aegis-*.sock rw,
-    
-    # Deny access to sensitive areas
-    deny /home/** rw,
-    deny /root/** rw,
-    deny @{PROC}/@{pid}/mem rw,
-    deny @{PROC}/@{pid}/cmdline rw,
-    deny /etc/shadow rw,
-    deny /etc/passwd rw,
-    
-    # Allow execution
-    /opt/hispanshield/core/rust/target/release/aegis-sentinel ix,
+    /run/aegis-*.sock        rw,
+
+    # Hard denies.
+    deny /home/**                rwklx,
+    deny /root/**                rwklx,
+    deny @{PROC}/@{pid}/mem      rwklx,
+    deny @{PROC}/@{pid}/cmdline  w,
+    deny @{PROC}/sys/kernel/**   w,
+    deny /etc/shadow             rwklx,
+    deny /etc/passwd             w,
+    deny /sys/kernel/**          w,
+    deny mount,
+    deny umount,
+    deny ptrace,
 }

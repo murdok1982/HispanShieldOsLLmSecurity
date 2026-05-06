@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import './index.css';
 import TopBar from './components/TopBar';
 import Dock from './components/Dock';
@@ -13,9 +13,12 @@ function App() {
   const [consented, setConsented] = useState(false);
   const [tampered, setTampered] = useState(false);
 
-  // Expose tamper trigger for testing
+  // Tamper trigger is only available in development; production builds
+  // never bind it on globalThis to keep destructive primitives off the JS surface.
   useEffect(() => {
-    (window as any).triggerTamper = () => setTampered(true);
+    if (import.meta.env.DEV) {
+      (globalThis as unknown as { triggerTamper?: () => void }).triggerTamper = () => setTampered(true);
+    }
   }, []);
 
   if (!consented) {

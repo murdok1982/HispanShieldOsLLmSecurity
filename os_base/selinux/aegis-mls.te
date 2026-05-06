@@ -1,0 +1,56 @@
+policy_module(aegis_mls, 1.0.0)
+
+# ----------------------------------------------------------------------------
+#  HispanShield OS — Real Bell-La Padula MLS policy module
+#
+#  Compile / install:
+#     checkmodule -M -m -o aegis-mls.mod aegis-mls.te
+#     semodule_package -o aegis-mls.pp -m aegis-mls.mod -f aegis-mls.fc
+#     semodule -i aegis-mls.pp
+#
+#  This module defines:
+#    - aegis_exec_t      (sentinel + gatekeeper binaries)
+#    - aegis_data_t      (state/log directories)
+#    - aegis_secret_t    (tokens, keys, never readable below "Secreto")
+#    - mlsconstrain      enforcing No-Read-Up / No-Write-Down on these types
+# ----------------------------------------------------------------------------
+
+require {
+    type init_t;
+    class file { read write open getattr execute };
+    class dir  { read search getattr };
+}
+
+type aegis_exec_t;
+type aegis_data_t;
+type aegis_secret_t;
+type aegis_log_t;
+
+# Domain transition: init runs the sentinel under aegis_exec_t.
+init_daemon_domain(aegis_exec_t, aegis_exec_t)
+
+# Sentinel may read its data and write its logs.
+allow aegis_exec_t aegis_data_t:dir   { read search getattr };
+allow aegis_exec_t aegis_data_t:file  { read getattr open };
+allow aegis_exec_t aegis_log_t:dir    { read search getattr };
+allow aegis_exec_t aegis_log_t:file   { read write open getattr };
+
+# === MLS constraints — Bell-La Padula ===
+#
+# Read constraint: a subject may read an object only if the subject's level
+# dominates the object's. (No-Read-Up.)
+mlsconstrain file { read getattr open }
+    (l1 dom l2);
+
+# Write constraint: a subject may write an object only if the levels match.
+# (No-Write-Down — strict variant; remove "eq" for the relaxed BLP form.)
+mlsconstrain file { write append }
+    (l1 eq l2);
+
+# Secrets: only Secreto (s2) and above may even open them.
+mlsconstrain file { open read }
+    (h1 dom h2)
+    where t2 == aegis_secret_t;
+
+# Audit: any process below Secreto cannot delete or rename audit logs.
+neverallow { domain -auditd_t } aegis_log_t:file { unlink rename };

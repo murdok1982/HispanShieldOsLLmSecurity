@@ -4,17 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-aya = { version = "0.12", features = ["async"] }
-aya-log = "0.12"
-aya-log-parser = "0.12"
-tokio = { version = "1", features = ["full"] }
+# Fase 0: minimal deps to compile a placeholder bin.
+# Fase 2 will reintroduce aya / aya-log once the BPF object is built out-of-band.
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
-[build-dependencies]
-aya-tool = { version = "0.12", features = ["async"] }
+anyhow = "1.0"
 
 [[bin]]
 name = "aegis-ebpf"

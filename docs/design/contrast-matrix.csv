@@ -1,0 +1,19 @@
+fg,bg,ratio,grade
+white #FFFFFF,bg-base #0A0E12,19.36:1,AAA
+white #FFFFFF,panel-1 #10151C,18.32:1,AAA
+white #FFFFFF,panel-2 #161D27,16.95:1,AAA
+neutral #C8D0DA,bg-base #0A0E12,12.44:1,AAA
+neutral #C8D0DA,panel-1 #10151C,11.77:1,AAA
+neutral #C8D0DA,panel-2 #161D27,10.89:1,AAA
+phosphor-green #7BFF8A,bg-base #0A0E12,15.23:1,AAA
+phosphor-green #7BFF8A,panel-1 #10151C,14.41:1,AAA
+phosphor-green #7BFF8A,panel-2 #161D27,13.33:1,AAA
+amber-alert #FFB300,bg-base #0A0E12,10.79:1,AAA
+amber-alert #FFB300,panel-1 #10151C,10.21:1,AAA
+amber-alert #FFB300,panel-2 #161D27,9.44:1,AAA
+info-blue #0095FF,bg-base #0A0E12,6.22:1,AA
+info-blue #0095FF,panel-1 #10151C,5.88:1,AA
+info-blue #0095FF,panel-2 #161D27,5.44:1,AA
+critical-red #FF3B30,bg-base #0A0E12,5.46:1,AA
+critical-red #FF3B30,panel-1 #10151C,5.17:1,AA
+critical-red #FF3B30,panel-2 #161D27,4.78:1,AA

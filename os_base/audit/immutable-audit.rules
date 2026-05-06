@@ -1,33 +1,71 @@
-# Immutable Audit Logging Configuration for HispanShield OS (Military Grade)
-# Prevents deletion or modification of audit logs even by root
+# HispanShield OS — auditd rules (Fase 2 hardening).
+#
+# These rules cover STIG kernel-hardening and DoD/NIST AU-2/AU-9 controls.
+# True log immutability is provided by fs-verity (see /opt/hispanshield/os_base/audit/fs-verity-setup.sh);
+# auditd alone CANNOT make log files tamper-evident on its own — root can still
+# truncate the log unless the underlying filesystem enforces append-only or the
+# files are sealed with fs-verity.
 
-# Clear existing rules
+# Clear existing rules.
 -D
 
-# Monitor Aegis services
--w /opt/hispanshield/core/rust/target/release/aegis-sentinel -p x -k aegis_exec
--w /opt/hispanshield/bin/llama-server -p x -k llm_exec
+# === Buffer & failure mode ===
+-b 16384
+-f 2
 
-# Monitor policy decisions
--w /etc/hispanshield/policies/ -p wa -k aegis_policy_change
--w /var/log/hispanshield/ -p wa -k aegis_logging
+# === Aegis binaries / config ===
+-w /opt/hispanshield/core/rust/target/release/aegis-sentinel    -p x  -k aegis_exec
+-w /opt/hispanshield/core/rust/target/release/aegis-gatekeeper  -p x  -k aegis_exec
+-w /opt/hispanshield/bin/llama-server                           -p x  -k llm_exec
 
-# Monitor TPM and Secure Boot
--w /etc/secureboot/ -p rwa -k secureboot_keys
--w /etc/tpm/ -p rwa -k tpm_operations
+-w /etc/hispanshield/policies/   -p wa -k aegis_policy_change
+-w /etc/hispanshield/secrets/    -p wa -k aegis_secrets_change
+-w /var/log/hispanshield/        -p wa -k aegis_logging
+-w /var/lib/hispanshield/        -p wa -k aegis_state_change
 
-# Monitor authentication events
--w /etc/pam.d/ -p wa -k pam_config
--w /etc/shadow -p wa -k shadow_modification
--w /etc/passwd -p wa -k passwd_modification
+# === Boot / firmware ===
+-w /etc/secureboot/              -p rwa -k secureboot_keys
+-w /etc/tpm/                     -p rwa -k tpm_operations
+-w /boot/                        -p wa  -k boot_change
+-w /etc/kernel/                  -p wa  -k kernel_change
+-w /etc/modprobe.d/              -p wa  -k modprobe_change
 
-# Monitor tool execution (offensive capabilities)
--a always,exit -F arch=b64 -S execve -F path=/usr/bin/nmap -k offensive_nmap
--a always,exit -F arch=b64 -S execve -F path=/usr/bin/masscan -k offensive_masscan
--a always,exit -F arch=b64 -S execve -F path=/usr/bin/nuclei -k offensive_nuclei
+# === Authn / authz ===
+-w /etc/pam.d/                   -p wa -k pam_config
+-w /etc/sudoers                  -p wa -k sudoers_change
+-w /etc/sudoers.d/               -p wa -k sudoers_change
+-w /etc/security/                -p wa -k security_config
+-w /etc/shadow                   -p wa -k shadow_modification
+-w /etc/passwd                   -p wa -k passwd_modification
+-w /etc/group                    -p wa -k group_modification
+-w /etc/gshadow                  -p wa -k gshadow_modification
 
-# Immutable configuration (prevents audit rule changes)
+# === Offensive tool execution (red-team capability under MFA) ===
+-a always,exit -F arch=b64 -S execve -F path=/usr/bin/nmap     -k offensive_nmap
+-a always,exit -F arch=b64 -S execve -F path=/usr/bin/masscan  -k offensive_masscan
+-a always,exit -F arch=b64 -S execve -F path=/usr/bin/nuclei   -k offensive_nuclei
+-a always,exit -F arch=b64 -S execve -F path=/usr/bin/sqlmap   -k offensive_sqlmap
+-a always,exit -F arch=b64 -S execve -F path=/usr/bin/zap.sh   -k offensive_zap
+-a always,exit -F arch=b64 -S execve -F path=/usr/bin/john     -k offensive_john
+-a always,exit -F arch=b64 -S execve -F path=/usr/bin/hashcat  -k offensive_hashcat
+-a always,exit -F arch=b64 -S execve -F path=/usr/bin/msfconsole -k offensive_metasploit
+
+# === Kernel-hardening (STIG) ===
+-a always,exit -F arch=b64 -S init_module,delete_module -k kernel_modules
+-a always,exit -F arch=b64 -S settimeofday,clock_settime,adjtimex -k time_change
+-a always,exit -F arch=b64 -S chmod,fchmod,fchmodat -F auid>=1000 -F auid!=4294967295 -k perm_mod
+-a always,exit -F arch=b64 -S chown,fchown,lchown,fchownat -F auid>=1000 -F auid!=4294967295 -k perm_mod
+-a always,exit -F arch=b64 -S unlink,unlinkat,rename,renameat -F auid>=1000 -F auid!=4294967295 -k delete
+
+# === Network configuration ===
+-w /etc/hosts                    -p wa -k hosts_change
+-w /etc/resolv.conf              -p wa -k resolv_change
+-w /etc/nftables.conf            -p wa -k firewall_change
+-w /etc/iptables/                -p wa -k firewall_change
+
+# === Audit log itself (best-effort; real protection = fs-verity) ===
+-w /var/log/audit/               -p wa -k audit_logs
+-w /etc/audit/                   -p wa -k auditd_config
+
+# Make the rules immutable for this boot. Operators must reboot to change them.
 -e 2
-
-# Make audit logs immutable (requires kernel patch or LSM)
--w /var/log/audit/ -p wa -k audit_logs

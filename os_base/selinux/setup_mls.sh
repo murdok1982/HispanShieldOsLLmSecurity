@@ -1,96 +1,93 @@
 #!/usr/bin/env bash
-# Configure SELinux for Multi-Level Security (MLS) following Bell-La Padula
-# For HispanShield OS State Military deployment
+# Configure SELinux MLS for HispanShield OS state-military deployment.
+#
+# Fase 2 hardening: this no longer ships only "informational" .conf files.
+# It compiles and installs the real policy module aegis-mls.te (Bell-La Padula
+# constraints + custom domains + file contexts), then validates with seinfo.
 
 set -euo pipefail
 
-log() { echo -e "\e[1;35m[MLS/SELinux]\e[0m $1"; }
+log()  { echo -e "\e[1;35m[MLS/SELinux]\e[0m $1"; }
+warn() { echo -e "\e[1;33m[WARNING]\e[0m $1" >&2; }
+err()  { echo -e "\e[1;41m[ERROR]\e[0m $1" >&2; exit 1; }
 
-# Install SELinux with MLS support (RHEL/Fedora base)
+POLICY_DIR="${POLICY_DIR:-/opt/hispanshield/os_base/selinux}"
+
+require_cmd() {
+    command -v "$1" >/dev/null 2>&1 || err "missing command: $1 (install $2)"
+}
+
 install_selinux_mls() {
-    log "Installing SELinux with MLS policy (RHEL/Fedora)..."
-    dnf update -y && dnf install -y \
-        selinux-policy-mls \
-        audit \
-        policycoreutils \
-        policycoreutils-python-utils \
-        setools-console
-    
-    # Switch to MLS policy
+    log "Ensuring SELinux MLS toolchain is installed..."
+    if command -v dnf >/dev/null 2>&1; then
+        dnf install -y selinux-policy-mls audit policycoreutils \
+            policycoreutils-python-utils setools-console checkpolicy
+    elif command -v apt-get >/dev/null 2>&1; then
+        apt-get update
+        apt-get install -y selinux-policy-mls auditd policycoreutils \
+            policycoreutils-python-utils setools checkpolicy semodule-utils
+    else
+        warn "Unknown package manager; install SELinux MLS toolchain manually."
+    fi
     sed -i 's/^SELINUXTYPE=.*/SELINUXTYPE=mls/' /etc/selinux/config
-    echo "MLS=enabled" >> /etc/selinux/mls/setrans.conf
-    
-    log "SELinux MLS policy installed. Reboot required to activate."
 }
 
-# Define security levels (Bell-La Padula)
-setup_security_levels() {
-    log "Setting up security levels (Confidencial/Secreto/AltoSecreto)..."
-    
-    cat > /etc/selinux/mls/security_levels.conf << 'LEVELS'
-# HispanShield OS Security Levels (Bell-La Padula Model)
-# No-Read-Up: Cannot read objects above your clearance
-# No-Write-Down: Cannot write objects below your clearance
+compile_policy() {
+    log "Compiling aegis-mls policy module..."
+    require_cmd checkmodule "checkpolicy package"
+    require_cmd semodule_package "policycoreutils package"
+    require_cmd semodule "policycoreutils package"
 
-level Confidencial = 100 {
-    desc = "Classified information requiring protection"
-    users = "aegis_agent, analyst_low"
+    pushd "$POLICY_DIR" >/dev/null
+    checkmodule -M -m -o aegis-mls.mod aegis-mls.te
+    semodule_package -o aegis-mls.pp -m aegis-mls.mod -f aegis-mls.fc
+    semodule -i aegis-mls.pp
+    popd >/dev/null
+
+    log "aegis-mls module installed."
 }
 
-level Secreto = 200 {
-    desc = "Sensitive military operations"
-    users = "aegis_admin, analyst_med"
+apply_file_contexts() {
+    log "Applying SELinux file contexts..."
+    restorecon -RFv /opt/hispanshield  || true
+    restorecon -RFv /var/log/hispanshield 2>/dev/null || true
+    restorecon -RFv /var/lib/hispanshield 2>/dev/null || true
+    restorecon -RFv /etc/hispanshield/secrets 2>/dev/null || true
 }
 
-level AltoSecreto = 300 {
-    desc = "Top secret military intelligence"
-    users = "aegis_root, analyst_high, commander"
-}
-LEVELS
-
-    log "Security levels configured"
-}
-
-# Label critical system files
-label_system_resources() {
-    log "Labeling system resources with MLS classifications..."
-    
-    # Label Aegis core (Secreto)
-    semanage fcontext -a -t aegis_exec_t -r s0-s2 "/opt/hispanshield/core(/.*)?"
-    semanage fcontext -a -t aegis_data_t -r s0-s2 "/var/log/hispanshield(/.*)?"
-    
-    # Label models (Alto Secreto if fine-tuned military)
-    semanage fcontext -a -t aegis_model_t -r s0-s3 "/opt/hispanshield/models(/.*)?"
-    
-    # Apply labels
-    restorecon -Rv /opt/hispanshield
-    restorecon -Rv /var/log/hispanshield
-    
-    log "System resources labeled"
-}
-
-# Configure user clearances
 setup_user_clearances() {
     log "Configuring user clearances..."
-    
-    # aegis_agent: Confidencial
-    semanage login -a -s staff_u -r s0 aegis_agent
-    
-    # aegis_admin: Secreto
-    semanage login -a -s staff_u -r s1 aegis_admin
-    
-    # root: Alto Secreto (full access)
-    semanage login -a -s staff_u -r s2 root
-    
-    log "User clearances configured"
+    semanage login -a -s staff_u -r s0     aegis_agent  || true
+    semanage login -m -s staff_u -r s1     aegis_admin  2>/dev/null \
+        || semanage login -a -s staff_u -r s1 aegis_admin || true
+    semanage login -m -s staff_u -r s0-s2  root         2>/dev/null \
+        || semanage login -a -s staff_u -r s0-s2 root    || true
 }
 
-# Main
-log "Starting MLS (Multi-Level Security) setup for State Military..."
-install_selinux_mls
-setup_security_levels
-label_system_resources
-setup_user_clearances
+verify() {
+    log "Verifying policy is loaded..."
+    if seinfo -t 2>/dev/null | grep -q '^   aegis_exec_t$'; then
+        log "OK  aegis_exec_t present"
+    else
+        err "aegis_exec_t not present in policy — installation failed"
+    fi
+    if seinfo -t 2>/dev/null | grep -q '^   aegis_secret_t$'; then
+        log "OK  aegis_secret_t present"
+    else
+        err "aegis_secret_t not present"
+    fi
+    log "Policy loaded. Reboot to activate MLS mode (and verify with: sestatus, id -Z)."
+}
 
-log "MLS configuration complete. Reboot to activate SELinux MLS."
-log "Verify with: 'sestatus' and 'id -Z'"
+main() {
+    if [ "$(id -u)" -ne 0 ]; then
+        err "must run as root"
+    fi
+    install_selinux_mls
+    compile_policy
+    apply_file_contexts
+    setup_user_clearances
+    verify
+}
+
+main "$@"

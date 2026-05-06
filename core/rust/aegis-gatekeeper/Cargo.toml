@@ -7,3 +7,8 @@ edition = "2021"
 tracing = "0.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+
+[dev-dependencies]
+# Used only by tests/allowlist_sync.rs to parse core/policy/tools.yaml and
+# detect drift between the YAML mirror and the in-binary PolicyEngine.
+serde_yaml = "0.9"
