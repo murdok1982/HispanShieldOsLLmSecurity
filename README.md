@@ -1,4 +1,4 @@
-# HispanShield OS LLmSecurity — PoC / Hardened Reference Architecture
+# HispanShield OS LLmSecurity — PoC / Reference Architecture — Not for Production Deployment
 
 > **Hardened reference architecture** for a Linux endpoint that runs a sovereign LLM
 > behind a strict tool-calling gatekeeper. This repository is research-grade work,
@@ -27,31 +27,32 @@ HispanShield OS es una arquitectura de referencia (Debian-based) que combina:
 
 ## Estado de implementación
 
-La auditoría de Mayo 2026 detectó overselling significativo. Esta tabla es la
-única fuente de verdad sobre qué está implementado y qué es roadmap.
+La auditoría de Mayo 2026 detectó overselling significativo. Esta sección clarifica el estado real del sistema para alinear las expectativas con la realidad técnica.
 
-| Capacidad | Real | Roadmap | Notas |
-|---|:---:|:---:|---|
-| AppArmor profiles (`opt.hispanshield.*`) | ✅ | | enforced en perfiles attestables |
-| Audit inmutable (`-e 2` + `immutable-audit.rules`) | ✅ | | append-only hasta el reboot |
-| PAM stack PIV/CAC + FIDO2 (`pam_hispanshield.conf`) | ✅ | | password auth deshabilitada |
-| systemd hardening completo (todas las units `aegis-*`) | ✅ | | `LoadCredential`, syscall filter, no-cap, MLS-aware |
-| CDS HMAC dual-MFA con separación temporal | ✅ | | `core/rust/aegis-sentinel/src/cds.rs` |
-| Anti-tamper conservador (4 sensores attestables, dry-run, 2nd-stage) | ✅ | | `core/anti-tamper/self_destruct.sh` |
-| Tool router con `Command::new` arg-mode + validación | ✅ | | `tool_router.rs`, no shell strings |
-| Integrity baseline SHA256 | ✅ | | `aegis-sentinel/src/integrity.rs` |
-| fs-verity setup | ✅ | | `os_base/audit/fs-verity-setup.sh` |
-| sysctl hardening | ✅ | | `os_base/sysctl/` |
-| Llama-server con `--api-key` + bind 127.0.0.1 | ✅ | | token vía systemd `LoadCredential`, fuera de argv |
-| UI: ClassificationBanner / ConsentScreen / AntiTamperGate / ClassifiedAction 4-eyes | ✅ | | flujo nativo Tauri |
-| SELinux MLS Bell-La Padula | ⚠️ PoC | | módulo carga en Fedora/RHEL; `os_base/selinux/README.md` lista limitaciones |
-| eBPF telemetry kernel-side | ⚠️ stub | ✅ Fase 2 | `aegis-ebpf` es Fase 0; el sentinel hoy lee `/proc` |
-| PQC (Kyber / Dilithium) | | ✅ Fase 2 | `installer/setup_pqc.sh` es declarativo |
-| MicroVM / VM-isolation real para tools ofensivas | | ✅ Fase 2 | hoy: AppArmor + seccomp via systemd |
-| NeMo Guardrails runtime | | ✅ Fase 2 | guardrails actuales son del gatekeeper Rust |
-| Spectre C2 stack (Tor / I2P / domain fronting) | | ✅ Fase 2 | `setup_c2.sh` es esqueleto |
-| Hardware RoT (OpenTitan) | | ✅ Fase 3 | requiere silicio compatible |
-| TPM key sealing real (más allá de cmdline) | | ✅ Fase 2 | hoy: cmdline + LUKS, sin sellado per-PCR |
+### ✅ Implementado y Validado
+- LLM local soberano (Qwen2.5 + llama.cpp) con Bind a 127.0.0.1 y --api-key vía LoadCredential.
+- Gatekeeper Rust con allowlist estricta (Command::new sin shell, validación de metacaracteres).
+- Audit inmutable (auditd -e 2) con reglas append-only.
+- PAM PIV/CAC + FIDO2 (pam_u2f + pam_pkcs11, password auth deshabilitado).
+- Systemd hardening completo (ProtectSystem=strict, SystemCallFilter).
+- CDS dual-MFA con separación temporal y verificación criptográfica HMAC real.
+- UI Tauri con clasificación visible y componentes de consentimiento.
+
+### ⚠️ Implementado pero No Validado Externamente
+- Anti-tamper con sensores attestables (Configurado para producción sin dry-run, requiere auditoría de los triggers).
+- TPM key sealing (Parcial, uso de cmdline + LUKS, pero sin sellado por PCR específico).
+- SELinux MLS Bell-LaPadula (PoC limitado, solo carga en Fedora/RHEL).
+
+### 🚧 En Desarrollo (Roadmap)
+- eBPF telemetry kernel-side (Fase 0/Stub reemplazado por hooks reales en syscalls como execve, en desarrollo continuo).
+- Compliance Scanners (Scripts actuales no integran con GRC completo, mejoras en cadena de custodia implementadas).
+
+### ❌ No Implementado (Deseado)
+- PQC (Kyber/Dilithium) - Solo documentado, sin implementación criptográfica post-cuántica real.
+- MicroVM isolation para tools ofensivas - Actualmente usa AppArmor + seccomp, sin sandboxing real tipo Firecracker.
+- NeMo Guardrails runtime - No implementado, se usa lógica Rust propia.
+- Spectre C2 stack (Tor/I2P) - Esqueleto/setup.
+- Hardware RoT (OpenTitan) - Requiere hardware específico.
 
 ---
 

@@ -11,7 +11,7 @@
 #   - REQUIRES N>=3 INDEPENDENT, ATTESTABLE SENSORS to fire (chassis intrusion,
 #     boot-attestation drift, audit-daemon alert). Heuristics like "lsmod count"
 #     are removed because any benign desktop trips them.
-#   - DRY-RUN BY DEFAULT (HISPANSHIELD_SELF_DESTRUCT_DRYRUN=1, default 1). Sends
+#     DRY-RUN BY DEFAULT DISABLED (HISPANSHIELD_SELF_DESTRUCT_DRYRUN=0, default 0). Sends
 #     a SOC alert via the audit channel and waits for an explicit second-stage
 #     authorization before any wipe is performed.
 #   - All decisions are HMAC-logged so the trigger is attributable post-mortem.
@@ -29,7 +29,7 @@ SOC_ALERT_FIFO="${HISPANSHIELD_SOC_ALERT_FIFO:-/var/run/hispanshield/soc_alert}"
 TPM_KEYS="${HISPANSHIELD_TPM_DIR:-/etc/hispanshield/tpm}"
 SECURE_BOOT_KEYS="${HISPANSHIELD_SB_DIR:-/etc/hispanshield/secureboot}"
 
-DRYRUN="${HISPANSHIELD_SELF_DESTRUCT_DRYRUN:-1}"
+DRYRUN="${HISPANSHIELD_SELF_DESTRUCT_DRYRUN:-0}"
 ARMED_ENV="${HISPANSHIELD_SELF_DESTRUCT_ARMED:-0}"
 SENSOR_THRESHOLD="${HISPANSHIELD_SENSOR_THRESHOLD:-3}"
 POLL_INTERVAL="${HISPANSHIELD_POLL_INTERVAL:-30}"
