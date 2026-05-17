@@ -19,7 +19,13 @@ services:
       - es-data:/usr/share/elasticsearch/data
       - ./certs:/usr/share/elasticsearch/config/certs
     ports:
-      - "9200:9200"
+      # Bound exclusively to loopback — never 0.0.0.0 — to prevent access
+      # from adjacent hosts in tactical deployments (shared WiFi, LAN).
+      - "127.0.0.1:9200:9200"
+    environment:
+      # Require mTLS from Filebeat/Logstash clients
+      - xpack.security.http.ssl.client_authentication=required
+      - xpack.security.http.ssl.certificate_authorities=/usr/share/elasticsearch/config/certs/ca.crt
     networks:
       - hispanshield-soc
 
@@ -31,7 +37,7 @@ services:
       - ELASTICSEARCH_USERNAME=kibana_system
       - ELASTICSEARCH_PASSWORD=${KIBANA_PASSWORD}
     ports:
-      - "5601:5601"
+      - "127.0.0.1:5601:5601"
     networks:
       - hispanshield-soc
     depends_on:
@@ -43,9 +49,8 @@ services:
       - ./logstash/pipeline:/usr/share/logstash/pipeline
       - ./logstash/config:/usr/share/logstash/config
     ports:
-      - "5044:5044"
-      - "5000:5000/tcp"
-      - "5000:5000/udp"
+      - "127.0.0.1:5044:5044"
+      - "127.0.0.1:5000:5000"
     networks:
       - hispanshield-soc
     depends_on:

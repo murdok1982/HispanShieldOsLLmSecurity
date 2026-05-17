@@ -1,0 +1,52 @@
+# HispanShield OS — IMA/EVM Integrity Measurement Policy
+# Ref: NIST SP 800-155, ICD 503, STIG V-RHEL-07-010020
+#
+# Load via: cat /etc/hispanshield/ima/ima-policy > /sys/kernel/security/ima/policy
+# Requires kernel config: CONFIG_IMA=y, CONFIG_IMA_APPRAISE=y, CONFIG_EVM=y
+
+# === Exclusions — filesystems that generate high-volume, low-value measurements ===
+dont_measure fsmagic=0x9fa0        # procfs
+dont_measure fsmagic=0x62656572    # sysfs
+dont_measure fsmagic=0x64626720    # debugfs
+dont_measure fsmagic=0x1cd1        # devtmpfs
+dont_measure fsmagic=0x858458f6    # ramfs
+dont_measure fsmagic=0x01021994    # tmpfs (measured selectively below)
+dont_measure fsmagic=0x73636673    # securityfs
+dont_measure fsmagic=0xf97cff8c    # selinuxfs
+
+# === Measurement rules — SHA-256, extending TPM PCR[10] ===
+# Measure every binary before execution (feeds remote attestation)
+measure func=BPRM_CHECK mask=MAY_EXEC pcr=10
+
+# Measure kernel modules before loading
+measure func=MODULE_CHECK pcr=10
+
+# Measure firmware blobs before loading
+measure func=FIRMWARE_CHECK pcr=10
+
+# Measure HispanShield configuration files (root-owned, no world-write)
+measure func=FILE_CHECK mask=MAY_READ uid=0 fowner=0 \
+    filepath=/etc/hispanshield/ pcr=10
+measure func=FILE_CHECK mask=MAY_READ uid=0 fowner=0 \
+    filepath=/opt/hispanshield/bin/ pcr=10
+
+# Measure LLM model GGUF files — hash recorded in TPM NV after fine-tune
+measure func=FILE_CHECK mask=MAY_READ \
+    filepath=/opt/hispanshield/models/ pcr=10
+
+# === Appraisal rules — deny execution without valid IMA signature ===
+# All executables in /opt/hispanshield/bin/ must carry an IMA signature
+# signed by the EVM key sealed to TPM PCR[0,1,2,3,7].
+appraise func=BPRM_CHECK appraise_type=imasig \
+    filepath=/opt/hispanshield/bin/
+
+# All executables run by the aegis system group require IMA signature
+appraise func=BPRM_CHECK appraise_type=imasig fgroup=aegis
+
+# Appraise kernel modules — blocks unsigned/tampered modules
+appraise func=MODULE_CHECK appraise_type=imasig
+
+# === tmpfs exception — scripts in RAM are measured but not appraised ===
+# (Appraisal on tmpfs requires IMA-appraise=fix kernel parameter on first boot)
+measure func=FILE_CHECK mask=MAY_READ fsmagic=0x01021994 \
+    filepath=/run/hispanshield/ pcr=10

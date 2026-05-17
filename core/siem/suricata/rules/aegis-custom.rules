@@ -1,0 +1,128 @@
+# HispanShield OS — Suricata Custom Detection Rules
+# Ref: MITRE ATT&CK Enterprise — Network-based indicators
+# All SIDs in range 9000001-9000099 are reserved for HispanShield.
+#
+# Load via suricata.yaml:
+#   rule-files:
+#     - /etc/suricata/rules/aegis-custom.rules
+
+# ── Reconnaissance detection ──────────────────────────────────────────────────
+
+# Unauthorized port scan originating from this host (SYN flood without gatekeeper session)
+alert tcp $HOME_NET any -> $EXTERNAL_NET any \
+    (msg:"AEGIS Unauthorized outbound port scan"; \
+     flags:S; \
+     threshold:type both, track by_src, count 20, seconds 2; \
+     sid:9000001; rev:2; \
+     classtype:network-scan; \
+     metadata:affected_product HispanShield, attack_target Network_Infrastructure;)
+
+# Stealth scan (FIN/URG/PSH — Xmas scan)
+alert tcp $HOME_NET any -> $EXTERNAL_NET any \
+    (msg:"AEGIS Xmas scan detected"; \
+     flags:FPU; \
+     sid:9000002; rev:1; \
+     classtype:network-scan;)
+
+# NULL scan
+alert tcp $HOME_NET any -> $EXTERNAL_NET any \
+    (msg:"AEGIS NULL scan detected"; \
+     flags:0; \
+     sid:9000003; rev:1; \
+     classtype:network-scan;)
+
+# ── Exfiltration detection ────────────────────────────────────────────────────
+
+# DNS tunnelling / data exfiltration via DNS (long subdomain labels)
+alert dns any any -> any any \
+    (msg:"AEGIS DNS exfiltration — long subdomain label"; \
+     dns.query; \
+     pcre:"/^[a-f0-9]{32,}\.[a-z0-9.-]+$/i"; \
+     sid:9000010; rev:2; \
+     classtype:trojan-activity; \
+     metadata:technique T1048.003;)
+
+# High-entropy DNS query (base64-encoded exfil)
+alert dns any any -> any any \
+    (msg:"AEGIS DNS exfiltration — high-entropy base64 label"; \
+     dns.query; \
+     pcre:"/^[A-Za-z0-9+\/]{40,}={0,2}\./"; \
+     sid:9000011; rev:1; \
+     classtype:trojan-activity;)
+
+# Large outbound ICMP (ICMP tunnel exfiltration)
+alert icmp $HOME_NET any -> $EXTERNAL_NET any \
+    (msg:"AEGIS ICMP tunnel exfiltration — oversized payload"; \
+     dsize:>512; \
+     itype:8; \
+     sid:9000012; rev:1; \
+     classtype:trojan-activity; \
+     metadata:technique T1095;)
+
+# ── LLM process isolation enforcement ────────────────────────────────────────
+
+# llama-server must only accept connections from localhost (127.0.0.1:11434)
+# Any connection to port 11434 from a non-loopback source is a policy violation
+alert tcp !127.0.0.1 any -> $HOME_NET 11434 \
+    (msg:"AEGIS LLM server external connection — policy violation"; \
+     sid:9000020; rev:2; \
+     classtype:policy-violation; \
+     metadata:technique T1071;)
+
+# LLM process initiating outbound connection to non-local endpoint
+alert tcp $HOME_NET any -> !127.0.0.0/8 any \
+    (msg:"AEGIS Unexpected outbound connection from LLM port range"; \
+     flow:from_client,established; \
+     sid:9000021; rev:1; \
+     classtype:policy-violation;)
+
+# ── C2 framework detection ────────────────────────────────────────────────────
+
+# Metasploit reverse handler without active audit session
+# (Metasploit default port 4444 inbound without authorized session context)
+alert tcp any any -> $HOME_NET 4444 \
+    (msg:"AEGIS Metasploit reverse handler — verify audit session active"; \
+     sid:9000030; rev:2; \
+     classtype:shellcode-detect; \
+     metadata:technique T1059, attack_target HispanShield_Node;)
+
+# Cobalt Strike default beacon port
+alert tcp $HOME_NET any -> $EXTERNAL_NET 443 \
+    (msg:"AEGIS Possible Cobalt Strike HTTPS beacon"; \
+     flow:established; \
+     content:"|16 03|"; depth:2; \
+     pcre:"/\x16\x03[\x00-\x03].{3}\x01/"; \
+     threshold:type both, track by_src, count 5, seconds 60; \
+     sid:9000031; rev:1; \
+     classtype:trojan-activity; \
+     metadata:technique T1071.001;)
+
+# Empire/Metasploit Meterpreter TLS
+alert tls $HOME_NET any -> $EXTERNAL_NET any \
+    (msg:"AEGIS Meterpreter-like TLS session — suspicious SNI"; \
+     tls.sni; content:!""; \
+     pcre:"/^[a-z0-9]{8,12}\.(com|net|org|io)$/"; \
+     flow:established; \
+     sid:9000032; rev:1; \
+     classtype:trojan-activity;)
+
+# ── Privilege escalation ──────────────────────────────────────────────────────
+
+# Exploit traffic targeting common local privilege escalation CVEs (dirty pipe etc.)
+# Detected via anomalous sendfile() volume from non-privileged process
+alert tcp $HOME_NET any -> $HOME_NET any \
+    (msg:"AEGIS Possible local privilege escalation traffic"; \
+     flow:established; \
+     dsize:>65000; \
+     threshold:type both, track by_src, count 3, seconds 1; \
+     sid:9000040; rev:1; \
+     classtype:attempted-admin;)
+
+# ── Honeypot interaction ──────────────────────────────────────────────────────
+
+# Any access to the deception infrastructure triggers high-fidelity alert
+alert tcp any any -> $HONEYPOT_NET any \
+    (msg:"AEGIS Honeypot access detected — potential internal threat"; \
+     sid:9000050; rev:1; \
+     classtype:policy-violation; \
+     metadata:confidence High, severity Critical;)

@@ -1,0 +1,53 @@
+# HispanShield OS — Suricata NIDS integration
+# Deploy alongside core/siem/docker-compose.yml:
+#   docker compose -f docker-compose.yml -f suricata-compose.yml up -d
+
+version: '3.8'
+
+services:
+  suricata:
+    image: jasonish/suricata:latest
+    # host networking required for raw packet capture on the physical interface
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_NICE
+    command: >
+      -c /etc/suricata/suricata.yaml
+      --af-packet=${AEGIS_MONITOR_IFACE:-eth0}
+      -l /var/log/suricata
+    volumes:
+      - ./suricata/suricata.yaml:/etc/suricata/suricata.yaml:ro
+      - ./suricata/rules:/etc/suricata/rules:ro
+      - suricata-logs:/var/log/suricata
+    environment:
+      - HOME_NET=${AEGIS_HOME_NET:-192.168.0.0/16,10.0.0.0/8,172.16.0.0/12}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "suricatasc", "-c", "version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  logstash-suricata:
+    image: docker.elastic.co/logstash/logstash:8.11.0
+    volumes:
+      - ./logstash/suricata-pipeline:/usr/share/logstash/pipeline:ro
+      - suricata-logs:/var/log/suricata:ro
+      - ./certs:/certs:ro
+    environment:
+      - ELASTICSEARCH_HOST=127.0.0.1
+      - ELASTICSEARCH_PORT=9200
+    depends_on:
+      - suricata
+    networks:
+      - hispanshield-soc
+    restart: unless-stopped
+
+networks:
+  hispanshield-soc:
+    external: true   # Shared with the main ELK compose stack
+
+volumes:
+  suricata-logs:

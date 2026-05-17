@@ -1,133 +1,179 @@
 #!/usr/bin/env bash
-# HispanShield OS LLmSecurity Installer (MVP)
-# EjecuciÃ³n esperada: sudo ./install.sh
+# HispanShield OS LLmSecurity — Installer
+# Execution: sudo ./install.sh
 
 set -euo pipefail
 
-log() { echo -e "\e[1;36m[HispanShield OS LLmSecurity Setup]\e[0m $1"; }
-error() { echo -e "\e[1;31m[ERROR]\e[0m $1"; exit 1; }
+INSTALL_DIR="/opt/hispanshield"
+LOG_DIR="/var/log/hispanshield"
+CONF_DIR="/etc/hispanshield"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+log()  { echo -e "\e[1;36m[HispanShield Install]\e[0m $1"; }
+warn() { echo -e "\e[1;33m[WARN]\e[0m $1" >&2; }
+error(){ echo -e "\e[1;31m[ERROR]\e[0m $1" >&2; exit 1; }
 
 if [ "$EUID" -ne 0 ]; then
-  error "Este script debe ejecutarse como root (sudo)."
+    error "Must run as root (sudo ./install.sh)"
 fi
 
-log "Iniciando instalaciÃ³n de Aegis Secure Environment (Militar - Estado)..."
+log "Starting HispanShield OS LLmSecurity installation (State-Grade)..."
 
-# 1. Crear usuarios y grupos aislados (Zero-Trust + Admin Militar)
-log "Creando usuarios y grupos del sistema aislados..."
-getent group aegis >/dev/null || groupadd -r aegis
+# ── 1. Users and groups ────────────────────────────────────────────────────────
+log "Creating isolated system users and groups..."
+getent group aegis       >/dev/null || groupadd -r aegis
 getent group aegis_admin >/dev/null || groupadd -r aegis_admin
-getent passwd aegis_agent >/dev/null || useradd -r -g aegis -s /usr/sbin/nologin -c "HispanShield OS LLmSecurity Agent User" aegis_agent
-getent passwd aegis_admin >/dev/null || useradd -r -g aegis_admin -s /bin/bash -c "HispanShield OS LLmSecurity Admin" aegis_admin
+getent passwd aegis_agent >/dev/null || \
+    useradd -r -g aegis -s /usr/sbin/nologin \
+        -c "HispanShield Agent" aegis_agent
+getent passwd aegis_admin >/dev/null || \
+    useradd -r -g aegis_admin -s /bin/bash \
+        -c "HispanShield Admin" aegis_admin
 
-# Disable password authentication for service accounts (require MFA)
-log "Deshabilitando autenticación por contraseña para cuentas de servicio..."
+# Lock accounts — MFA only, no password auth
 passwd -l aegis_agent 2>/dev/null || true
 passwd -l aegis_admin 2>/dev/null || true
-# Remove password hash from shadow (replace with ! for locked account)
-sed -i 's/^\(aegis_agent:\)[^:]*:/\1!:1/' /etc/shadow 2>/dev/null || true
-sed -i 's/^\(aegis_admin:\)[^:]*:/\1!:1/' /etc/shadow 2>/dev/null || true
-# CWE-287 FIX: Enforce empty password field (not just locked)
-sed -i 's/^\(aegis_agent:\)!:/aegis_agent:\*:/' /etc/shadow 2>/dev/null || true
-sed -i 's/^\(aegis_admin:\)!:/aegis_admin:\*:/' /etc/shadow 2>/dev/null || true
 
-# 2. Configurar estructura de directorios con cifrado
-log "Estableciendo estructura de directorios y permisos..."
-mkdir -p /opt/HispanShield OS LLmSecurity/{core,models,bin,ui,rust}
-mkdir -p /var/log/HispanShield OS LLmSecurity
-mkdir -p /etc/HispanShield OS LLmSecurity/{policies,secureboot,tpm}
+# ── 2. Directory structure ─────────────────────────────────────────────────────
+log "Creating directory structure..."
+install -d -m 750 -o aegis_agent -g aegis "${INSTALL_DIR}"/{core,models,bin,ui,rust}
+install -d -m 700 "${LOG_DIR}"
+install -d -m 750 "${CONF_DIR}"/{policies,pam,ima}
+install -d -m 700 "${CONF_DIR}"/{secureboot,tpm,secrets}
 
-chown -R aegis_agent:aegis /opt/HispanShield OS LLmSecurity
-chmod 750 /opt/HispanShield OS LLmSecurity
-chmod 700 /etc/HispanShield OS LLmSecurity/secureboot
-chmod 700 /etc/HispanShield OS LLmSecurity/tpm
-
-# 3. Configurar TPM 2.0 + LUKS Disk Encryption (Militar)
-log "Configurando TPM 2.0 para sellado de claves LUKS..."
-if command -v tpm2_createprimary &> /dev/null; then
-    # Create TPM primary key
-    tpm2_createprimary -C e -g sha256 -G rsa -c /etc/HispanShield OS LLmSecurity/tpm/primary.ctx || true
-    
-    # Configure LUKS to use TPM-sealed key (for future disk encryption setup)
-    mkdir -p /etc/cryptsetup-keys.d/
-    echo "TPM2: Enabled for disk encryption" > /etc/HispanShield OS LLmSecurity/tpm/status
-    log "TPM 2.0 configurado correctamente"
+# ── 3. TPM 2.0 key sealing ─────────────────────────────────────────────────────
+log "Configuring TPM 2.0 for LUKS key sealing..."
+if command -v tpm2_createprimary &>/dev/null; then
+    tpm2_createprimary -C e -g sha256 -G rsa \
+        -c "${CONF_DIR}/tpm/primary.ctx" 2>/dev/null || \
+        warn "TPM primary context creation failed — check TPM availability"
+    echo "TPM2: Enabled for disk encryption" > "${CONF_DIR}/tpm/status"
+    log "TPM 2.0 configured"
 else
-    warn "TPM 2.0 tools no disponibles - instalar tpm2-tools en el sistema destino"
+    warn "tpm2-tools not found — install on the target system"
 fi
 
-# 4. Habilitar FIPS 140-3 para cumplimiento militar
-log "Habilitando modo FIPS 140-3 para criptografÃ­a validada..."
-if command -v fips-mode-setup &> /dev/null; then
-    fips-mode-setup --enable || log "FIPS: Requiere reinicio para activarse completamente"
-    echo "FIPS=1" >> /etc/environment
+# ── 4. FIPS 140-3 ─────────────────────────────────────────────────────────────
+log "Enabling FIPS 140-3 mode..."
+if command -v fips-mode-setup &>/dev/null; then
+    fips-mode-setup --enable || \
+        log "FIPS: Requires reboot to take full effect"
+    grep -q 'FIPS=1' /etc/environment 2>/dev/null || \
+        echo "FIPS=1" >> /etc/environment
 else
-    log "fips-mode-setup no encontrado - instalar crypto-policies en sistema destino"
+    warn "fips-mode-setup not found — install crypto-policies on target system"
 fi
 
-# 5. Descarga del Modelo LLM Ligero Local (2B)
-log "Iniciando descarga segura del modelo GenAI (Qwen2.5-1.5B/Gemma-2B GGUF)..."
-python3 download_model.py
-
-# 6. Compilar binarios Rust (Gatekeeper + Sentinel)
-log "Compilando motores core en Rust para mÃ¡xima seguridad..."
-if command -v cargo &> /dev/null; then
-    cd /opt/HispanShield OS LLmSecurity/rust/aegis-gatekeeper && cargo build --release
-    cd /opt/HispanShield OS LLmSecurity/rust/aegis-sentinel && cargo build --release
-    ln -sf /opt/HispanShield OS LLmSecurity/rust/target/release/aegis-sentinel /opt/HispanShield OS LLmSecurity/bin/
-    log "Binarios Rust compilados exitosamente"
+# ── 5. LLM model download ──────────────────────────────────────────────────────
+log "Downloading sovereign LLM model (Qwen2.5 GGUF)..."
+if [ -f "${SCRIPT_DIR}/download_model.py" ]; then
+    python3 "${SCRIPT_DIR}/download_model.py" || \
+        warn "Model download failed — run manually after install"
 else
-    warn "Cargo no encontrado - instalar Rust en el sistema destino"
+    warn "download_model.py not found in ${SCRIPT_DIR}"
 fi
 
-# 7. Instalando y securizando servicios
-log "Instalando demonios systemd..."
-cp ../os_base/sys_services/*.service /etc/systemd/system/
-systemctl daemon-reload
+# ── 6. Rust binaries ───────────────────────────────────────────────────────────
+log "Compiling Rust core engines (Gatekeeper + Sentinel + PQC)..."
+if command -v cargo &>/dev/null; then
+    (cd "${REPO_ROOT}/core/rust" && cargo build --release --workspace)
+    install -m 755 \
+        "${REPO_ROOT}/core/rust/target/release/aegis-sentinel" \
+        "${INSTALL_DIR}/bin/"
+    install -m 755 \
+        "${REPO_ROOT}/core/rust/target/release/aegis-ebpf" \
+        "${INSTALL_DIR}/bin/"
+    log "Rust binaries compiled and installed"
+else
+    warn "cargo not found — install Rust toolchain on target system"
+fi
 
-# 8. Configurar AppArmor para endurecimiento adicional
-log "Configurando perfiles AppArmor..."
-mkdir -p /etc/apparmor.d
-cat > /etc/apparmor.d/opt.hispanshield.core.rust.aegis-sentinel << 'APPARMOR'
+# ── 7. Systemd services ────────────────────────────────────────────────────────
+log "Installing systemd daemon units..."
+if [ -d "${REPO_ROOT}/os_base/sys_services" ]; then
+    cp "${REPO_ROOT}"/os_base/sys_services/*.service /etc/systemd/system/ 2>/dev/null || true
+    systemctl daemon-reload
+fi
+
+# ── 8. AppArmor ───────────────────────────────────────────────────────────────
+log "Configuring AppArmor mandatory access control..."
+install -d -m 755 /etc/apparmor.d
+if [ -d "${REPO_ROOT}/os_base/apparmor" ]; then
+    cp "${REPO_ROOT}"/os_base/apparmor/* /etc/apparmor.d/ 2>/dev/null || true
+fi
+# Inline profile as fallback
+cat > /etc/apparmor.d/opt.hispanshield.bin.aegis-sentinel <<'APPARMOR'
 #include <tunables/global>
-/opt/hispanshield/core/rust/target/release/aegis-sentinel {
+/opt/hispanshield/bin/aegis-sentinel {
     #include <abstractions/base>
     #include <abstractions/nameservice>
-    
     network inet stream,
     /opt/hispanshield/** r,
     /var/log/hispanshield/** rw,
     /etc/hispanshield/** r,
-    /run/aegis-*.sock rw,
+    /run/aegis/*.sock rw,
     deny /home/** rw,
     deny @{PROC}/@{pid}/mem rw,
 }
 APPARMOR
-
-# Install PAM MFA configuration
-log "Configurando autenticación MFA (PIV/CAC/FIDO2)..."
-mkdir -p /etc/hispanshield/pam
-cp /opt/hispanshield/os_base/pam/pam_hispanshield.conf /etc/pam.d/hispanshield
-cp /opt/hispanshield/os_base/pam/u2f_keys /etc/hispanshield/pam/u2f_keys
-chmod 600 /etc/hispanshield/pam/u2f_keys
-
-# Disable SSH password auth globally
-if [ -f /etc/ssh/sshd_config ]; then
-    sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-    sed -i 's/^#*KbdInteractiveAuthentication.*/KbdInteractiveAuthentication no/' /etc/ssh/sshd_config
-    echo "AuthenticationMethods publickey,keyboard-interactive" >> /etc/ssh/sshd_config
-fi
-
 systemctl enable apparmor 2>/dev/null || true
 
-# 9. Generate SBOM and sovereignty audit
-log "Generando SBOM (Software Bill of Materials)..."
-mkdir -p /opt/hispanshield/compliance
-bash /opt/hispanshield/core/compliance/generate_sbom.sh
+# ── 9. PAM MFA (PIV/CAC + FIDO2) ──────────────────────────────────────────────
+log "Configuring MFA (PIV/CAC + FIDO2)..."
+if [ -f "${REPO_ROOT}/os_base/pam/pam_hispanshield.conf" ]; then
+    install -m 644 "${REPO_ROOT}/os_base/pam/pam_hispanshield.conf" \
+        /etc/pam.d/hispanshield
+fi
+if [ -f "${REPO_ROOT}/os_base/pam/u2f_keys" ]; then
+    install -m 600 "${REPO_ROOT}/os_base/pam/u2f_keys" \
+        "${CONF_DIR}/pam/u2f_keys"
+fi
 
-# 10. Setup audited forks for sovereignty
-log "Configurando forks auditados para soberanía..."
-bash /opt/hispanshield/core/compliance/sovereign_forks.sh
+# Disable SSH password authentication
+if [ -f /etc/ssh/sshd_config ]; then
+    sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' \
+        /etc/ssh/sshd_config
+    sed -i 's/^#*KbdInteractiveAuthentication.*/KbdInteractiveAuthentication no/' \
+        /etc/ssh/sshd_config
+    grep -q 'AuthenticationMethods publickey' /etc/ssh/sshd_config || \
+        echo "AuthenticationMethods publickey,keyboard-interactive" \
+        >> /etc/ssh/sshd_config
+fi
 
-log "InstalaciÃ³n completada (Militar). Por favor, revisa /etc/HispanShield OS LLmSecurity/policies antes de iniciar los servicios."
-log "ADVERTENCIA: Este sistema requiere Secure Boot habilitado y claves TPM configuradas."
+# ── 10. IMA/EVM integrity ──────────────────────────────────────────────────────
+log "Setting up IMA/EVM binary integrity measurement..."
+if [ -f "${REPO_ROOT}/os_base/ima/setup_ima_evm.sh" ]; then
+    # Copy policy to /etc/hispanshield/ima/
+    install -m 644 "${REPO_ROOT}/os_base/ima/ima-policy" \
+        "${CONF_DIR}/ima/ima-policy"
+    bash "${REPO_ROOT}/os_base/ima/setup_ima_evm.sh" || \
+        warn "IMA/EVM setup failed — kernel may not have CONFIG_IMA=y"
+fi
+
+# ── 11. Generate bearer token for Sentinel API ────────────────────────────────
+log "Generating Sentinel API bearer token..."
+if [ ! -f "${CONF_DIR}/secrets/sentinel.token" ]; then
+    openssl rand -hex 32 > "${CONF_DIR}/secrets/sentinel.token"
+    chmod 400 "${CONF_DIR}/secrets/sentinel.token"
+    chown aegis_agent:aegis "${CONF_DIR}/secrets/sentinel.token"
+fi
+
+# ── 12. SBOM and sovereignty audit ────────────────────────────────────────────
+log "Generating SBOM (Software Bill of Materials)..."
+install -d -m 750 "${INSTALL_DIR}/compliance"
+bash "${REPO_ROOT}/core/compliance/generate_sbom.sh" 2>/dev/null || \
+    warn "SBOM generation failed — install syft on target system"
+
+log "Auditing sovereign forks..."
+bash "${REPO_ROOT}/core/compliance/sovereign_forks.sh" 2>/dev/null || \
+    warn "Sovereign fork audit failed — manual review required"
+
+# ── Done ───────────────────────────────────────────────────────────────────────
+log "Installation complete."
+log "NEXT STEPS:"
+log "  1. Reboot to activate FIPS mode and IMA policy"
+log "  2. Configure TPM PCR sealing: ${CONF_DIR}/tpm/"
+log "  3. Enroll FIDO2/PIV keys: ${CONF_DIR}/pam/u2f_keys"
+log "  4. Start services: systemctl start aegis-sentinel aegis-ebpf"
+log "  WARNING: Secure Boot and TPM must be enabled on the target hardware."

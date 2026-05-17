@@ -3,13 +3,22 @@ name = "aegis-ebpf"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+# Enable Fase 2 eBPF loader (requires aya + compiled BPF object)
+# Build: cargo build --features ebpf
+ebpf = ["dep:aya", "dep:aya-log", "dep:bytes"]
+
 [dependencies]
-# Fase 0: minimal deps to compile a placeholder bin.
-# Fase 2 will reintroduce aya / aya-log once the BPF object is built out-of-band.
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "time"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+# Fase 2 optional deps (activated by --features ebpf)
+aya       = { version = "0.12", features = ["async_tokio"], optional = true }
+aya-log   = { version = "0.2", optional = true }
+bytes     = { version = "1.0", optional = true }
 
 [[bin]]
 name = "aegis-ebpf"

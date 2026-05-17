@@ -1,0 +1,305 @@
+# HispanShield OS — NeMo Guardrails Colang Rail Definitions
+# Covers: input safety, classification level enforcement, jailbreak detection,
+#         output safety, classified data leakage, and tool injection prevention.
+
+# ---------------------------------------------------------------------------
+# FLOW: check input safety
+# Detects jailbreak phrases, NSFW content, and command injection attempts.
+# ---------------------------------------------------------------------------
+define flow check input safety
+  $jailbreak_patterns = ["ignore previous instructions",
+                         "ignore all previous",
+                         "forget your instructions",
+                         "you are now DAN",
+                         "do anything now",
+                         "pretend you have no restrictions",
+                         "pretend you have no guidelines",
+                         "act as if you have no",
+                         "disregard all prior",
+                         "bypass your safety",
+                         "bypass security",
+                         "override your programming",
+                         "you are no longer",
+                         "new persona",
+                         "developer mode",
+                         "jailbreak",
+                         "prompt injection",
+                         "###SYSTEM",
+                         "[SYSTEM]",
+                         "<|im_start|>system",
+                         "<!-- instructions"]
+
+  $nsfw_patterns = ["explicit content",
+                    "sexual content",
+                    "pornographic",
+                    "generate nude",
+                    "create explicit"]
+
+  $cmd_injection_patterns = ["$(", "`", "; rm ", "| bash", "| sh",
+                              "&& bash", "wget http", "curl http",
+                              "/bin/bash", "/bin/sh", "exec(",
+                              "subprocess", "__import__", "eval(",
+                              "os.system"]
+
+  $matched_jailbreak = False
+  $matched_nsfw      = False
+  $matched_cmd       = False
+
+  for $pattern in $jailbreak_patterns
+    if $pattern in lower($user_message)
+      $matched_jailbreak = True
+
+  for $pattern in $nsfw_patterns
+    if $pattern in lower($user_message)
+      $matched_nsfw = True
+
+  for $pattern in $cmd_injection_patterns
+    if $pattern in $user_message
+      $matched_cmd = True
+
+  if $matched_jailbreak
+    $block_reason = "jailbreak_pattern_detected"
+    bot refuse jailbreak
+    stop
+
+  if $matched_nsfw
+    $block_reason = "nsfw_content_detected"
+    bot refuse nsfw
+    stop
+
+  if $matched_cmd
+    $block_reason = "command_injection_detected"
+    bot refuse command injection
+    stop
+
+
+define bot refuse jailbreak
+  "Solicitud bloqueada: se ha detectado un intento de jailbreak o bypass de instrucciones de seguridad. Esta acción ha sido registrada."
+
+define bot refuse nsfw
+  "Solicitud bloqueada: contenido no permitido detectado. HispanShield OS no procesa solicitudes de este tipo."
+
+define bot refuse command injection
+  "Solicitud bloqueada: se ha detectado un intento de inyección de comandos. Todos los comandos deben ejecutarse a través de Function Calling estructurado."
+
+
+# ---------------------------------------------------------------------------
+# FLOW: check classification level
+# Verifies that the user's clearance level matches the classification of the
+# requested information before allowing the query to proceed.
+# ---------------------------------------------------------------------------
+define flow check classification level
+  $user_clearance   = $session_context["clearance_level"]    # e.g. "UNCLASSIFIED" | "SECRET" | "TS" | "TS/SCI"
+  $request_level    = $session_context["requested_data_level"]  # derived from request tagging
+
+  $clearance_rank = {"UNCLASSIFIED": 0,
+                     "CONFIDENCIAL": 1,
+                     "SECRET": 2,
+                     "TS": 3,
+                     "TS/SCI": 4}
+
+  $user_rank    = $clearance_rank[$user_clearance]
+  $request_rank = $clearance_rank[$request_level]
+
+  if $request_rank > $user_rank
+    $block_reason = "insufficient_clearance"
+    bot refuse classification
+    stop
+
+
+define bot refuse classification
+  "Acceso denegado: su nivel de acreditación no es suficiente para acceder a información con este nivel de clasificación. Incidente registrado."
+
+
+# ---------------------------------------------------------------------------
+# FLOW: check jailbreak attempt
+# Multi-pattern deep scan with structured audit log entry.
+# ---------------------------------------------------------------------------
+define flow check jailbreak attempt
+  $advanced_patterns = ["roleplay as",
+                        "play the role of",
+                        "hypothetically speaking",
+                        "in a fictional world where",
+                        "for educational purposes only",
+                        "theoretically how would",
+                        "without your safety",
+                        "if you were unrestricted",
+                        "your true self",
+                        "your base model",
+                        "ignore your training",
+                        "opposite day",
+                        "evil twin",
+                        "shadow self",
+                        "no filter mode",
+                        "uncensored mode",
+                        "grandma exploit",
+                        "sure here is how",
+                        "of course here is"]
+
+  $structural_patterns = ["\\n---\\n",
+                          "\\n###\\n",
+                          "END OF INSTRUCTIONS",
+                          "BEGIN REAL TASK",
+                          "ACTUAL TASK:",
+                          "HIDDEN PROMPT:",
+                          "CONFIDENTIAL INSTRUCTIONS:"]
+
+  $jailbreak_score = 0
+
+  for $pattern in $advanced_patterns
+    if $pattern in lower($user_message)
+      $jailbreak_score = $jailbreak_score + 1
+
+  for $pattern in $structural_patterns
+    if $pattern in $user_message
+      $jailbreak_score = $jailbreak_score + 2
+
+  if $jailbreak_score >= 2
+    $block_reason = "multi_pattern_jailbreak_score_" + str($jailbreak_score)
+    bot refuse advanced jailbreak
+    stop
+
+  if $jailbreak_score == 1
+    # Single weak signal — flag but allow with warning logged
+    $audit_flag = "jailbreak_weak_signal"
+
+
+define bot refuse advanced jailbreak
+  "Solicitud rechazada: análisis multi-patrón ha detectado un intento sofisticado de evasión de seguridad (puntuación >= 2). Evento auditado y notificado al SIEM."
+
+
+# ---------------------------------------------------------------------------
+# FLOW: check output safety
+# Scans the LLM response for classification markers, embedded credentials,
+# and PII before returning to the user.
+# ---------------------------------------------------------------------------
+define flow check output safety
+  $credential_patterns = ["password:", "passwd:", "api_key:", "apikey:",
+                          "secret_key:", "private_key:", "bearer ",
+                          "Authorization: ", "AWS_SECRET", "-----BEGIN RSA",
+                          "-----BEGIN PRIVATE KEY", "token=", "access_token"]
+
+  $pii_indicators = ["SSN:", "social security", "date of birth:", "dob:",
+                     "credit card", "passport number", "nif:", "nie:",
+                     "numero de identificacion"]
+
+  $found_credential = False
+  $found_pii        = False
+
+  for $pattern in $credential_patterns
+    if $pattern in lower($bot_response)
+      $found_credential = True
+
+  for $pattern in $pii_indicators
+    if $pattern in lower($bot_response)
+      $found_pii = True
+
+  if $found_credential
+    $block_reason = "credential_in_output"
+    bot sanitize output credentials
+    stop
+
+  if $found_pii
+    $block_reason = "pii_in_output"
+    bot sanitize output pii
+    stop
+
+
+define bot sanitize output credentials
+  "Respuesta bloqueada por el sistema de seguridad de salida: se han detectado posibles credenciales o claves en la respuesta generada. Revise los datos de entrenamiento o el contexto del sistema."
+
+define bot sanitize output pii
+  "Respuesta bloqueada: información de identificación personal (PII) detectada en la salida del modelo. El evento ha sido registrado para revisión."
+
+
+# ---------------------------------------------------------------------------
+# FLOW: check classified data leakage
+# Regex-oriented scan of bot output for classification banners, SECRET
+# markers, IP addresses appearing in unexpected contexts, etc.
+# ---------------------------------------------------------------------------
+define flow check classified data leakage
+  $classification_markers = ["TOP SECRET",
+                              "TS//SCI",
+                              "SECRET//NOFORN",
+                              "SECRET//REL TO",
+                              "CONFIDENCIAL//",
+                              "CLASIFICADO:",
+                              "RESERVADO:",
+                              "[TS]",
+                              "[SECRET]",
+                              "[C]//",
+                              "HANDLE VIA COMINT",
+                              "ORCON",
+                              "NOFORN",
+                              "SCI CONTROL"]
+
+  $found_marker = False
+  $found_marker_value = ""
+
+  for $marker in $classification_markers
+    if $marker in $bot_response
+      $found_marker = True
+      $found_marker_value = $marker
+
+  if $found_marker
+    $block_reason = "classified_marker_in_output:" + $found_marker_value
+    bot refuse classified leakage
+    stop
+
+  # Heuristic: private RFC-1918 IP ranges appearing alongside sensitive keywords
+  # is flagged for MANUAL_REVIEW rather than hard block.
+  $sensitive_keywords_with_ip = ["network diagram", "internal subnet",
+                                  "vpn config", "firewall rule", "acl",
+                                  "routing table"]
+
+  $has_sensitive_keyword = False
+  for $kw in $sensitive_keywords_with_ip
+    if $kw in lower($bot_response)
+      $has_sensitive_keyword = True
+
+  if $has_sensitive_keyword
+    $audit_flag = "sensitive_network_info_in_output"
+
+
+define bot refuse classified leakage
+  "Salida bloqueada: se ha detectado un marcador de clasificación en la respuesta generada. El modelo no debe reproducir banners de clasificación. Incidente registrado en SIEM."
+
+
+# ---------------------------------------------------------------------------
+# FLOW: check tool injection
+# Prevents the LLM from embedding tool calls or function-call syntax in its
+# natural language output (prompt-to-tool injection via text).
+# ---------------------------------------------------------------------------
+define flow check tool injection
+  $tool_injection_patterns = ["<tool_call>",
+                               "</tool_call>",
+                               "<function_calls>",
+                               "</function_calls>",
+                               "{\"tool\":",
+                               "{\"function\":",
+                               "{\"name\": \"",
+                               "\"arguments\":",
+                               "<invoke>",
+                               "</invoke>",
+                               "<<<TOOL_CALL>>>",
+                               "EXECUTE_FUNCTION(",
+                               "CALL_TOOL(",
+                               "[FUNCTION_CALL]",
+                               "<<<FUNCTION>>>"]
+
+  $found_injection = False
+  $found_injection_pattern = ""
+
+  for $pattern in $tool_injection_patterns
+    if $pattern in $bot_response
+      $found_injection = True
+      $found_injection_pattern = $pattern
+
+  if $found_injection
+    $block_reason = "tool_injection_in_output:" + $found_injection_pattern
+    bot refuse tool injection
+    stop
+
+
+define bot refuse tool injection
+  "Respuesta bloqueada: el modelo ha intentado incluir una llamada a herramienta embebida en texto plano. Todas las invocaciones de herramientas deben realizarse a través del canal de Function Calling estructurado, no dentro del cuerpo de la respuesta."

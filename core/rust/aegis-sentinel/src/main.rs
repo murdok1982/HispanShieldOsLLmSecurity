@@ -60,7 +60,7 @@ async fn main() -> anyhow::Result<()> {
     let tool_router = StrictToolRouter::new(policy_engine);
     
     // Initialize kernel-level eBPF telemetry
-    let telemetry = match AegisTelemetry::new().await {
+    let telemetry: Arc<AegisTelemetry> = match AegisTelemetry::new() {
         Ok(t) => {
             info!(target: "sentinel", "eBPF kernel telemetry initialized");
             Arc::new(t)
@@ -72,9 +72,9 @@ async fn main() -> anyhow::Result<()> {
     };
     
     // Initialize Active Defense (honeypots, deception, attribution, wargames)
-    let mut active_defense = ActiveDefense::new();
+    let _active_defense = ActiveDefense::new();
     info!(target: "sentinel", "Active Defense modules loaded");
-    
+
     // Initialize Multi-Level Security (Bell-La Padula)
     let mut mls = BellLaPadula::new();
     mls.add_user("aegis_admin".to_string(), SecurityLevel::Secreto, "admin".to_string());
@@ -83,11 +83,11 @@ async fn main() -> anyhow::Result<()> {
     info!(target: "sentinel", "MLS (Bell-La Padula) initialized with clearance levels");
     
     // Initialize Cross-Domain Solution (CDS)
-    let mut cds = CrossDomainSolution::new();
+    let _cds = CrossDomainSolution::new();
     info!(target: "sentinel", "Cross-Domain Solution (CDS) initialized");
-    
+
     // Initialize Code Signing with state PGP key
-    let code_signing = CodeSigning::new(
+    let _code_signing = CodeSigning::new(
         "HispanShield State".to_string(),
         "/etc/hispanshield/pki/state-pgp-public.asc".to_string()
     );

@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(cargo check *)",
-      "PowerShell(Get-Command cargo -ErrorAction SilentlyContinue)",
-      "PowerShell(Get-Command rustc -ErrorAction SilentlyContinue)"
-    ]
-  }
-}

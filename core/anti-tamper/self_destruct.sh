@@ -114,14 +114,55 @@ wipe_tpm_keys() {
 }
 
 wipe_sensitive_data() {
-    log "Wiping sensitive data..."
-    find /opt/hispanshield -type f -print0 2>/dev/null \
-        | xargs -0 -r shred -vfz -n 7 2>/dev/null || true
-    rm -rf /opt/hispanshield/models/* 2>/dev/null || true
-    rm -rf /var/log/hispanshield/* 2>/dev/null || true
+    log "Wiping sensitive data — crypto-erasure + secure discard..."
+
+    # === Step 1: Cryptographic erasure of LUKS volumes ===
+    # Destroying all key slots makes the encrypted volume cryptographically
+    # unrecoverable without overwriting any sectors — effective on SSD/NVMe/eMMC
+    # where wear-leveling defeats shred-based overwrite approaches.
+    local luks_parts
+    luks_parts=$(blkid 2>/dev/null | awk -F: '/TYPE="crypto_LUKS"/{print $1}')
+    for part in $luks_parts; do
+        warn "Crypto-erasing LUKS volume: $part"
+        # Wipe all 8 key slots (LUKS2 supports up to 32 but 0-7 covers LUKS1+2 common range)
+        for slot in 0 1 2 3 4 5 6 7; do
+            cryptsetup luksKillSlot --batch-mode "$part" "$slot" 2>/dev/null || true
+        done
+        # NVMe Secure Erase (User Data Erase, ses=1)
+        if command -v nvme &>/dev/null; then
+            nvme format "$part" --ses=1 --force 2>/dev/null || true
+        fi
+        # ATA Secure Erase for SATA SSDs
+        if command -v hdparm &>/dev/null; then
+            hdparm --security-set-pass AegisWipe "$part" 2>/dev/null && \
+                hdparm --security-erase AegisWipe "$part" 2>/dev/null || true
+        fi
+        # TRIM/discard — instructs flash controller to zero all LBAs
+        blkdiscard -f "$part" 2>/dev/null || true
+    done
+
+    # === Step 2: HDD mechanical drives — DoD 5220.22-M overwrite ===
+    # Only applied to rotational media (ROTA=1) where overwrite is effective.
+    local hdd_parts
+    hdd_parts=$(lsblk -d -o NAME,ROTA 2>/dev/null | awk '$2=="1"{print "/dev/"$1}')
+    for part in $hdd_parts; do
+        warn "DoD overwrite on rotational disk: $part"
+        dd if=/dev/urandom of="$part" bs=4M conv=fsync status=none 2>/dev/null &
+    done
+    wait
+
+    # === Step 3: RAM-backed filesystems — shred is safe and effective here ===
+    find /tmp /run/hispanshield /dev/shm -type f \
+        -exec shred -fuz {} \; 2>/dev/null || true
+    find /opt/hispanshield/models -type f \
+        -exec shred -fuz {} \; 2>/dev/null || true
+
+    # === Step 4: Secure Boot key material ===
     [ -d "$SECURE_BOOT_KEYS" ] && find "$SECURE_BOOT_KEYS" -type f -print0 \
-        | xargs -0 -r shred -vfz -n 7 2>/dev/null || true
-    audit_log "WIPE_DATA_DONE"
+        | xargs -0 -r shred -fuz 2>/dev/null || true
+
+    rm -rf /var/log/hispanshield/* 2>/dev/null || true
+    audit_log "WIPE_DATA_DONE method=crypto_erase+nvme_format+hdd_dod"
 }
 
 wipe_disk_encryption() {
@@ -138,12 +179,38 @@ wipe_disk_encryption() {
 }
 
 wipe_ram_pressure() {
-    log "Allocating memory pressure to flush cold-boot residue..."
-    # Detached subshell; OS may OOM-kill it, which is intended.
-    nohup bash -c '
-        free_kb=$(awk "/MemFree/{print \$2}" /proc/meminfo)
-        head -c "${free_kb}K" /dev/urandom > /dev/null
-    ' &>/dev/null &
+    log "Cold-boot RAM mitigation — kexec scrub kernel or memory pressure..."
+
+    # Preferred: kexec into a dedicated scrub kernel that zeroes all RAM before
+    # resetting. This is the only reliable defence against cold-boot attacks.
+    if [ -f /boot/scrub-kernel.img ] && command -v kexec &>/dev/null; then
+        log "Loading scrub kernel via kexec..."
+        kexec -l /boot/scrub-kernel.img --append="console=ttyS0 panic=1 init=/sbin/memwipe"
+        sync
+        audit_log "WIPE_RAM_KEXEC_ARMED"
+        kexec -e  # Transfers control to scrub kernel — does not return
+    fi
+
+    # Fallback: fill available RAM with random data via mlock to prevent
+    # the kernel from swapping the pages out before the physical reset.
+    log "kexec scrub kernel unavailable — using mlock RAM pressure fallback"
+    python3 -c "
+import ctypes, mmap, os, sys
+try:
+    libc = ctypes.CDLL('libc.so.6', use_errno=True)
+    free_pages = os.sysconf('SC_AVPHYS_PAGES')
+    page_size  = os.sysconf('SC_PAGE_SIZE')
+    # Use at most 75% of free RAM to avoid OOM before the wipe completes
+    size = int(free_pages * page_size * 0.75)
+    buf  = mmap.mmap(-1, size)
+    ptr  = ctypes.c_char_p(ctypes.addressof(ctypes.c_char.from_buffer(buf)))
+    libc.mlock(ptr, size)
+    buf[:] = os.urandom(size)
+except Exception as e:
+    print(f'RAM wipe fallback error: {e}', file=sys.stderr)
+" 2>/dev/null || true
+
+    audit_log "WIPE_RAM_DONE"
 }
 
 wait_for_second_stage_authorization() {

@@ -156,6 +156,39 @@ HispanShield OS LLmSecurity (Sentinel + Gatekeeper).
 DOCS
 }
 
+run_grc_engine() {
+    local grc_script="/opt/hispanshield/core/compliance/grc_engine.py"
+
+    # Also accept a repo-relative path for development environments.
+    if [ ! -f "$grc_script" ]; then
+        local repo_relative
+        repo_relative="$(dirname "$(realpath "$0")")/grc_engine.py"
+        [ -f "$repo_relative" ] && grc_script="$repo_relative"
+    fi
+
+    if [ ! -f "$grc_script" ]; then
+        warn "grc_engine.py not found at $grc_script — skipping GRC engine run."
+        return 0
+    fi
+
+    if ! command -v python3 >/dev/null 2>&1; then
+        warn "python3 not found — skipping GRC engine run."
+        return 0
+    fi
+
+    local report_file="$RESULTS_DIR/grc_report_$(date +%Y%m%d).txt"
+    log "Running HispanShield GRC engine (NIST 800-53 + DISA STIG + custom controls)..."
+    python3 "$grc_script" --format text --output "$report_file" \
+        || warn "grc_engine.py returned non-zero (see $report_file)."
+    log "GRC report: $report_file"
+
+    # Also emit a JSON snapshot for machine consumption.
+    local json_file="$RESULTS_DIR/grc_report_$(date +%Y%m%d).json"
+    python3 "$grc_script" --format json --output "$json_file" \
+        || warn "grc_engine.py JSON output failed."
+    log "GRC JSON : $json_file"
+}
+
 main() {
     log "HispanShield Compliance Scan — $(date -Iseconds)"
     run_openscap_stig
@@ -163,6 +196,7 @@ main() {
     check_icd_503
     check_stigs
     generate_common_criteria_docs
+    run_grc_engine
     log "Done. Results in: $RESULTS_DIR"
 }
 

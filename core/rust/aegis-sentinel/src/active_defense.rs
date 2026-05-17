@@ -1,4 +1,4 @@
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
@@ -42,7 +42,7 @@ impl ActiveDefense {
         let session = AttackerSession {
             ip: "0.0.0.0".to_string(),
             port,
-            protocol: service_type,
+            protocol: service_type.clone(),
             start_time: chrono::Utc::now().timestamp(),
             deception_active: true,
         };

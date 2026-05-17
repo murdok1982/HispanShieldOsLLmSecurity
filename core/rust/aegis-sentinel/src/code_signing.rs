@@ -1,7 +1,6 @@
-use tracing::{info, warn, error};
+use tracing::{info, warn};
 use std::process::Command;
 use std::path::Path;
-use hex;
 
 pub struct CodeSigning {
     gpg_key_id: String,
